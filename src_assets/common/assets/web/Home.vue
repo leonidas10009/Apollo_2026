@@ -1,8 +1,17 @@
 <template>
-  <Navbar></Navbar>
-  <div id="content" class="container">
-    <h1 class="my-4">{{ $t('index.welcome') }}</h1>
-    <p>{{ $t('index.description') }}</p>
+  <div id="content">
+    <div class="page-header">
+      <div>
+        <h1 class="page-header-title">{{ $t('index.welcome') }}</h1>
+        <p class="page-header-desc">{{ $t('index.description') }}</p>
+      </div>
+      <div class="page-header-actions">
+        <RouterLink class="btn btn-primary" to="/pin">
+          <key-round :size="18" class="icon"></key-round>
+          {{ $t('dashboard.action_pair') }}
+        </RouterLink>
+      </div>
+    </div>
 
     <!-- Fatal Errors Alert -->
     <div class="alert alert-danger my-4" v-if="fancyLogs.some(x => x.level === 'Fatal')">
@@ -53,70 +62,189 @@
       </div>
     </div>
 
-    <!-- Version -->
-    <div class="card my-4">
-      <div class="card-body" v-if="version">
-        <h2>Version {{version.version}}</h2>
-
-        <div v-if="loading" class="my-3">
-          {{ $t('index.loading_latest') }}
+    <section class="dashboard-hero" :aria-label="$t('dashboard.title')">
+      <div class="dashboard-hero-main">
+        <div class="dashboard-hero-icon">
+          <cast :size="24"></cast>
         </div>
-
-        <div class="alert alert-success my-3" v-if="buildVersionIsDirty">
-          <package :size="18" class="icon"></package>
-          {{ $t('index.version_dirty') }} 🌇
+        <div>
+          <span class="badge" :class="isStreaming ? 'text-bg-success' : 'text-bg-secondary'">
+            <span class="app-status-dot me-1"></span>
+            {{ isStreaming ? $t('dashboard.status_streaming') : $t('dashboard.status_idle') }}
+          </span>
+          <h2 class="dashboard-hero-title">{{ sessionTitle }}</h2>
+          <p class="dashboard-hero-subtitle">{{ isStreaming ? $t('dashboard.status_streaming_desc') : $t('dashboard.status_idle_desc') }}</p>
         </div>
+      </div>
+      <div class="dashboard-hero-actions">
+        <RouterLink class="btn btn-outline-primary" to="/clients">
+          <users :size="18" class="icon"></users>
+          {{ $t('dashboard.action_clients') }}
+        </RouterLink>
+        <RouterLink class="btn btn-success" to="/apps">
+          <gamepad-2 :size="18" class="icon"></gamepad-2>
+          {{ $t('dashboard.action_apps') }}
+        </RouterLink>
+      </div>
+    </section>
 
-        <div class="alert alert-info my-3" v-if="installedVersionNotStable">
-          <info :size="18" class="icon"></info>
-          {{ $t('index.installed_version_not_stable') }}
+    <div class="dashboard-stats">
+      <div class="stat-card">
+        <div class="stat-card-header">
+          <span>{{ $t('dashboard.paired_clients') }}</span>
+          <users :size="16"></users>
         </div>
+        <div class="stat-card-value">{{ pairedClients }}</div>
+        <div class="stat-card-meta">
+          <template v-if="pairedClients">{{ $t('dashboard.clients_connected', { count: connectedClients }) }}</template>
+          <template v-else>{{ $t('dashboard.clients_none') }}</template>
+        </div>
+      </div>
 
-        <div v-else-if="(!preReleaseBuildAvailable || !notifyPreReleases) && !stableBuildAvailable && !buildVersionIsDirty">
-          <div class="alert alert-success my-3">
-            <check-circle :size="18" class="icon"></check-circle>
-            {{ $t('index.version_latest') }}
+      <div class="stat-card">
+        <div class="stat-card-header">
+          <span>{{ $t('dashboard.applications') }}</span>
+          <monitor-play :size="16"></monitor-play>
+        </div>
+        <div class="stat-card-value">{{ appCount }}</div>
+        <div class="stat-card-meta">{{ $t('dashboard.applications_desc') }}</div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-card-header">
+          <span>{{ $t('dashboard.host_version') }}</span>
+          <package :size="16"></package>
+        </div>
+        <div class="stat-card-value">{{ version ? version.version : '—' }}</div>
+        <div class="stat-card-meta">{{ $t(versionStatusKey) }}</div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-card-header">
+          <span>{{ $t('dashboard.platform') }}</span>
+          <cpu :size="16"></cpu>
+        </div>
+        <div class="stat-card-value">{{ platform || '—' }}</div>
+        <div class="stat-card-meta">{{ gamepadDriver || $t('dashboard.session_details') }}</div>
+      </div>
+    </div>
+
+    <div class="dashboard-columns">
+      <div class="dashboard-panel">
+        <div class="dashboard-panel-header">
+          <h3 class="dashboard-panel-title">{{ $t('dashboard.quick_actions') }}</h3>
+        </div>
+        <div class="quick-action-list">
+          <RouterLink class="quick-action" to="/pin">
+            <span class="quick-action-icon"><key-round :size="16"></key-round></span>
+            <span>{{ $t('dashboard.action_pair') }}</span>
+            <chevron-right :size="16" class="quick-action-arrow"></chevron-right>
+          </RouterLink>
+          <RouterLink class="quick-action" to="/clients">
+            <span class="quick-action-icon"><shield :size="16"></shield></span>
+            <span>{{ $t('dashboard.action_clients') }}</span>
+            <chevron-right :size="16" class="quick-action-arrow"></chevron-right>
+          </RouterLink>
+          <RouterLink class="quick-action" to="/config">
+            <span class="quick-action-icon"><settings :size="16"></settings></span>
+            <span>{{ $t('dashboard.action_config') }}</span>
+            <chevron-right :size="16" class="quick-action-arrow"></chevron-right>
+          </RouterLink>
+          <RouterLink class="quick-action" to="/troubleshooting">
+            <span class="quick-action-icon"><life-buoy :size="16"></life-buoy></span>
+            <span>{{ $t('dashboard.action_logs') }}</span>
+            <chevron-right :size="16" class="quick-action-arrow"></chevron-right>
+          </RouterLink>
+        </div>
+      </div>
+
+      <div class="dashboard-panel">
+        <div class="dashboard-panel-header">
+          <h3 class="dashboard-panel-title">{{ $t('dashboard.session_details') }}</h3>
+          <RouterLink class="btn btn-sm btn-outline-secondary" to="/clients">{{ $t('dashboard.view_all') }}</RouterLink>
+        </div>
+        <dl class="row mb-0">
+          <dt class="col-sm-5">{{ $t('dashboard.host_name') }}</dt>
+          <dd class="col-sm-7 monospace">{{ hostName }}</dd>
+          <dt class="col-sm-5">{{ $t('dashboard.current_application') }}</dt>
+          <dd class="col-sm-7">{{ currentAppName || $t('dashboard.no_active_app') }}</dd>
+          <dt class="col-sm-5">{{ $t('dashboard.connected_devices') }}</dt>
+          <dd class="col-sm-7">{{ connectedClients }} / {{ pairedClients }}</dd>
+        </dl>
+
+        <div v-if="clients.length" class="mt-3 pt-3 border-top border-secondary-subtle">
+          <div v-for="client in clients.slice(0, 4)" :key="client.uuid" class="d-flex align-items-center justify-content-between py-1">
+            <span class="text-truncate">{{ client.name || $t('pin.unpair_single_unknown') }}</span>
+            <span class="badge" :class="client.connected ? 'text-bg-success' : 'text-bg-secondary'">
+              {{ client.connected ? $t('pin.connected') : $t('pin.offline') }}
+            </span>
           </div>
         </div>
+        <p v-else class="text-muted mb-0 mt-3">{{ $t('dashboard.clients_none') }}</p>
+      </div>
+    </div>
 
-        <div v-if="notifyPreReleases && preReleaseBuildAvailable">
-          <div class="alert alert-warning my-3">
-            <!-- header row -->
-            <div class="d-flex align-items-center justify-content-between gap-3 flex-wrap mb-3">
-              <div class="d-flex align-items-center gap-3 flex-wrap">
-                <alert-circle :size="18" class="icon"></alert-circle>
-                <span>{{ $t('index.new_pre_release') }}</span>
-                <h5 class="mb-0">{{ preReleaseVersion.release.name }}</h5>
-              </div>
-              <a class="btn btn-success flex-shrink-0" :href="preReleaseVersion.release.html_url" target="_blank">
-                <download :size="18" class="icon"></download>
-                {{ $t('index.download') }}
-              </a>
+    <!-- Version and release information -->
+    <div class="dashboard-panel mb-4" v-if="version">
+      <div class="dashboard-panel-header">
+        <h3 class="dashboard-panel-title">{{ $t('dashboard.updates') }}</h3>
+        <span class="badge text-bg-secondary">v{{ version.version }}</span>
+      </div>
+
+      <div v-if="loading" class="my-3">
+        {{ $t('index.loading_latest') }}
+      </div>
+
+      <div class="alert alert-success my-3" v-if="buildVersionIsDirty">
+        <package :size="18" class="icon"></package>
+        {{ $t('index.version_dirty') }} 🌇
+      </div>
+
+      <div class="alert alert-info my-3" v-if="installedVersionNotStable">
+        <info :size="18" class="icon"></info>
+        {{ $t('index.installed_version_not_stable') }}
+      </div>
+
+      <div v-else-if="(!preReleaseBuildAvailable || !notifyPreReleases) && !stableBuildAvailable && !buildVersionIsDirty">
+        <div class="alert alert-success my-3">
+          <check-circle :size="18" class="icon"></check-circle>
+          {{ $t('index.version_latest') }}
+        </div>
+      </div>
+
+      <div v-if="notifyPreReleases && preReleaseBuildAvailable">
+        <div class="alert alert-warning my-3">
+          <div class="d-flex align-items-center justify-content-between gap-3 flex-wrap mb-3">
+            <div class="d-flex align-items-center gap-3 flex-wrap">
+              <alert-circle :size="18" class="icon"></alert-circle>
+              <span>{{ $t('index.new_pre_release') }}</span>
+              <h5 class="mb-0">{{ preReleaseVersion.release.name }}</h5>
             </div>
-
-            <!-- body row (full width) -->
-            <div class="markdown-body release-notes" v-html="convertMarkdownToHtml(preReleaseVersion.release.body)"></div>
+            <a class="btn btn-success flex-shrink-0" :href="preReleaseVersion.release.html_url" target="_blank">
+              <download :size="18" class="icon"></download>
+              {{ $t('index.download') }}
+            </a>
           </div>
+
+          <div class="markdown-body release-notes" v-html="convertMarkdownToHtml(preReleaseVersion.release.body)"></div>
         </div>
+      </div>
 
-        <div v-if="stableBuildAvailable">
-          <div class="alert alert-warning my-3">
-            <!-- header row -->
-            <div class="d-flex align-items-center justify-content-between gap-3 flex-wrap mb-3">
-              <div class="d-flex align-items-center gap-3 flex-wrap">
-                <alert-circle :size="18" class="icon"></alert-circle>
-                <span>{{ $t('index.new_stable') }}</span>
-                <h5 class="mb-0">{{ githubVersion.release.name }}</h5>
-              </div>
-              <a class="btn btn-success flex-shrink-0" :href="githubVersion.release.html_url" target="_blank">
-                <download :size="18" class="icon"></download>
-                {{ $t('index.download') }}
-              </a>
+      <div v-if="stableBuildAvailable">
+        <div class="alert alert-warning my-3">
+          <div class="d-flex align-items-center justify-content-between gap-3 flex-wrap mb-3">
+            <div class="d-flex align-items-center gap-3 flex-wrap">
+              <alert-circle :size="18" class="icon"></alert-circle>
+              <span>{{ $t('index.new_stable') }}</span>
+              <h5 class="mb-0">{{ githubVersion.release.name }}</h5>
             </div>
-
-            <!-- body row (full width) -->
-            <div class="markdown-body release-notes" v-html="convertMarkdownToHtml(githubVersion.release.body)"></div>
+            <a class="btn btn-success flex-shrink-0" :href="githubVersion.release.html_url" target="_blank">
+              <download :size="18" class="icon"></download>
+              {{ $t('index.download') }}
+            </a>
           </div>
+
+          <div class="markdown-body release-notes" v-html="convertMarkdownToHtml(githubVersion.release.body)"></div>
         </div>
       </div>
     </div>
@@ -130,19 +258,27 @@
 
 <script>
   import { marked } from 'marked'
-  import Navbar from './Navbar.vue'
   import ResourceCard from './ResourceCard.vue'
   import SunshineVersion from './sunshine_version'
   import {
     AlertCircle,
     AlertTriangle,
+    Cast,
+    ChevronRight,
+    Cpu,
     FileText,
     Wrench,
-    Package,
+    Gamepad2,
     Info,
     CheckCircle,
     Download,
-    Gamepad2
+    KeyRound,
+    LifeBuoy,
+    MonitorPlay,
+    Package,
+    Settings,
+    Shield,
+    Users,
   } from '@lucide/vue'
 
   // Configure marked to allow HTML
@@ -157,17 +293,25 @@
   console.log("Hello, Apollo!")
   export default {
     components: {
-      Navbar,
       ResourceCard,
       AlertCircle,
       AlertTriangle,
+      Cast,
+      ChevronRight,
+      Cpu,
       FileText,
       Wrench,
       Package,
       Info,
       CheckCircle,
       Download,
-      Gamepad2
+      Gamepad2,
+      KeyRound,
+      LifeBuoy,
+      MonitorPlay,
+      Settings,
+      Shield,
+      Users,
     },
     data() {
       return {
@@ -184,6 +328,8 @@
         virtualhidLicense: null,
         vigembus: null,
         permissions: [],
+        appsData: null,
+        clients: [],
       }
     },
     async created() {
@@ -199,6 +345,17 @@
           this.permissions = (await response.json()).permissions || [];
         } catch (e) {
           console.error('Failed to fetch permission status:', e);
+        }
+        try {
+          this.appsData = await fetch('./api/apps').then((r) => r.json());
+        } catch (e) {
+          console.error('Failed to fetch applications:', e);
+        }
+        try {
+          const clientsResponse = await fetch('./api/clients/list').then((r) => r.json());
+          this.clients = clientsResponse.named_certs || [];
+        } catch (e) {
+          console.error('Failed to fetch clients:', e);
         }
         console.log("Version: ", this.version.version)
         this.githubVersion = new SunshineVersion(await fetch("https://api.github.com/repos/ClassicOldSong/Apollo/releases/latest").then((r) => r.json()), null);
@@ -231,7 +388,7 @@
       try {
         this.logs = (await fetch("./api/logs").then(r => r.text()))
       } catch (e) {
-        console.error(e);
+        console.error(e)
       }
       this.loading = false;
     },
@@ -239,6 +396,43 @@
       /** Return required permissions that the current platform can check and has not granted. */
       missingPermissions() {
         return this.permissions.filter(permission => permission.required && permission.verifiable && permission.status !== 'granted');
+      },
+      /** Applications configured on this host. */
+      apps() {
+        return this.appsData?.apps || [];
+      },
+      /** Number of configured applications. */
+      appCount() {
+        return this.apps.length;
+      },
+      /** Display name of the host reported by the applications endpoint. */
+      hostName() {
+        return this.appsData?.host_name || globalThis.location?.hostname || 'localhost';
+      },
+      /** Application currently running, if any. */
+      currentApp() {
+        const currentId = this.appsData?.current_app;
+        return this.apps.find(app => app.uuid === currentId) || null;
+      },
+      /** Name of the running application. */
+      currentAppName() {
+        return this.currentApp?.name || '';
+      },
+      /** Number of paired devices. */
+      pairedClients() {
+        return this.clients.length;
+      },
+      /** Number of devices connected right now. */
+      connectedClients() {
+        return this.clients.filter(client => client.connected).length;
+      },
+      /** Whether a session or application is active. */
+      isStreaming() {
+        return !!this.currentAppName || this.connectedClients > 0;
+      },
+      /** Headline for the dashboard hero card. */
+      sessionTitle() {
+        return this.currentAppName || (this.isStreaming ? this.$t('dashboard.status_streaming') : this.$t('dashboard.status_idle'));
       },
       /**
        * Build the virtual-input message shown on the home page.
@@ -310,8 +504,27 @@
         return this.preReleaseVersion.isGreater(this.version) && this.preReleaseVersion.isGreater(this.githubVersion);
       },
       buildVersionIsDirty() {
+        if (!this.version) {
+          return false;
+        }
         return this.version.version?.split(".").length === 5 &&
           this.version.version.includes("dirty")
+      },
+      /** Localization key describing the installed build compared with upstream releases. */
+      versionStatusKey() {
+        if (this.loading) {
+          return 'dashboard.build_loading'
+        }
+        if (this.buildVersionIsDirty) {
+          return 'dashboard.build_dirty'
+        }
+        if (this.installedVersionNotStable) {
+          return 'dashboard.build_prerelease'
+        }
+        if (this.stableBuildAvailable) {
+          return 'dashboard.build_update'
+        }
+        return 'dashboard.build_current'
       },
       /** Parse the text errors, calculating the text, the timestamp and the level */
       fancyLogs() {

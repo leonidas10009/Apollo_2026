@@ -1,5 +1,4 @@
 <template>
-  <Navbar></Navbar>
   <div id="content" class="container">
     <div class="my-4">
       <h1>{{ $t('config.configuration') }}</h1>
@@ -144,7 +143,6 @@
 
 <script>
   import { computed, toRaw } from 'vue'
-  import Navbar from './Navbar.vue'
   import { apiFetch } from './fetch_utils'
   import configTabs from './configs/config_tabs.json'
   import General from './configs/tabs/General.vue'
@@ -197,7 +195,6 @@
 
   export default {
     components: {
-      Navbar,
       General,
       Inputs,
       Network,

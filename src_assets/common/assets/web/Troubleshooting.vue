@@ -1,5 +1,4 @@
 <template>
-  <Navbar></Navbar>
   <div id="content" class="container">
     <h1 class="my-4">{{ $t('troubleshooting.troubleshooting') }}</h1>
     <div class="card my-4" v-if="permissions.length || permissionError">
@@ -527,7 +526,6 @@
 </template>
 
 <script>
-    import Navbar from './Navbar.vue'
     import { apiFetch } from './fetch_utils'
     import {
       AlertCircle,
@@ -559,7 +557,6 @@
 
     export default {
       components: {
-        Navbar,
         AlertCircle,
         AlertTriangle,
         Check,

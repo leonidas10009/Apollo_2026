@@ -1,15 +1,19 @@
 <template>
-  <Navbar></Navbar>
-  <div id="content" class="container">
-    <div class="card my-4">
+  <div id="content">
+    <div class="page-header">
+      <div>
+        <h1 class="page-header-title">{{ $t('pin.device_management') }}</h1>
+        <p class="page-header-desc">{{ $t('pin.device_management_desc') }}</p>
+      </div>
+      <div class="page-header-actions">
+        <button class="btn btn-danger" :disabled="unpairAllPressed" @click="unpairAll">
+          {{ $t('pin.unpair_all') }}
+        </button>
+      </div>
+    </div>
+
+    <div class="card mb-4">
       <div class="card-body">
-        <div class="d-flex justify-content-end align-items-center">
-          <h1 class="me-auto mb-0">{{ $t('pin.device_management') }}</h1>
-          <button class="btn btn-danger" :disabled="unpairAllPressed" @click="unpairAll">
-            {{ $t('pin.unpair_all') }}
-          </button>
-        </div>
-        <p class="mb-0 mt-3">{{ $t('pin.device_management_desc') }}</p>
         <p class="mb-0">
           {{ $t('pin.device_management_warning') }}
           <a href="https://github.com/ClassicOldSong/Apollo/wiki/Permission-System" target="_blank">
@@ -174,7 +178,6 @@
 </template>
 
 <script>
-  import Navbar from './Navbar.vue'
   import Checkbox from './Checkbox.vue'
   import { apiFetch } from './fetch_utils'
   import {
@@ -248,7 +251,6 @@
 
   export default {
     components: {
-      Navbar,
       Checkbox,
       Check,
       Pencil,

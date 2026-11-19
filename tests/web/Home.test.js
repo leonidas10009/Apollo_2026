@@ -10,10 +10,16 @@ vi.mock('../../src_assets/common/assets/web/ResourceCard.vue', () => ({
 
 import Home from '../../src_assets/common/assets/web/Home.vue'
 
-async function mountHome(platform, { developmentVersion = true, licensed = true, serviceAvailable = true, gamepadDriver = 'virtualhid', permissions = [] } = {}) {
+async function mountHome(platform, { developmentVersion = true, licensed = true, serviceAvailable = true, gamepadDriver = 'virtualhid', permissions = [], apps = [], currentApp = '', clients = [] } = {}) {
   vi.stubGlobal('fetch', vi.fn(async url => {
     if (url === './api/config') {
       return { json: async () => ({ platform, controller: 'enabled', gamepad_driver: gamepadDriver, version: '2026.927.1200' }) }
+    }
+    if (url === './api/apps') {
+      return { json: async () => ({ apps, current_app: currentApp, host_name: 'Test Host' }) }
+    }
+    if (url === './api/clients/list') {
+      return { json: async () => ({ named_certs: clients, platform, status: true }) }
     }
     if (url === './api/virtual-input/status') {
       return {
@@ -111,6 +117,29 @@ describe('development broker home notice', () => {
     const wrapper = await mountHome('macos', { gamepadDriver: 'none' })
 
     expect(wrapper.find('.alert.my-4').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('summarizes paired devices, applications and the running app', async () => {
+    const wrapper = await mountHome('windows', {
+      apps: [
+        { uuid: 'app-steam', name: 'Steam' },
+        { uuid: 'app-desktop', name: 'Desktop' },
+      ],
+      currentApp: 'app-steam',
+      clients: [
+        { uuid: 'client-deck', name: 'Steam Deck', connected: true },
+        { uuid: 'client-tv', name: 'Living Room TV', connected: false },
+      ],
+    })
+
+    const statValues = wrapper.findAll('.stat-card-value').map(node => node.text())
+    expect(statValues[0]).toBe('2')
+    expect(statValues[1]).toBe('2')
+    expect(wrapper.get('.dashboard-hero-title').text()).toBe('Steam')
+    expect(wrapper.text()).toContain('Test Host')
+    expect(wrapper.text()).toContain('Steam Deck')
+    expect(wrapper.text()).toContain('Living Room TV')
     wrapper.unmount()
   })
 })

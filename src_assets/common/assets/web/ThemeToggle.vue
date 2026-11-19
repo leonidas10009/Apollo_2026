@@ -16,6 +16,7 @@ import {
   MonitorSmartphone,
   Moon,
   Mountain,
+  Orbit,
   Shuffle,
   Sparkles,
   Sprout,
@@ -60,6 +61,10 @@ onMounted(() => {
       <!-- Dark Themes -->
       <li class="theme-menu-group">
         <h6 class="dropdown-header">{{ $t('navbar.theme_group_dark') }}</h6>
+        <button type="button" class="dropdown-item d-flex align-items-center" data-bs-theme-value="apollo" aria-pressed="false">
+          <Orbit :size="18" class="theme-icon icon"></Orbit>
+          {{ $t('navbar.theme_apollo') }}
+        </button>
         <button type="button" class="dropdown-item d-flex align-items-center" data-bs-theme-value="dark" aria-pressed="false">
           <Moon :size="18" class="theme-icon icon"></Moon>
           {{ $t('navbar.theme_dark') }}

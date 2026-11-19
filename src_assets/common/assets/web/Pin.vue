@@ -1,7 +1,11 @@
 <template>
-  <Navbar></Navbar>
-  <div id="content" class="container">
-    <h1 class="my-4 text-center">{{ currentTab === 'otp' ? $t('pin.otp_pairing') : $t('pin.pin_pairing') }}</h1>
+  <div id="content">
+    <div class="page-header justify-content-center text-center">
+      <div class="w-100">
+        <h1 class="page-header-title">{{ currentTab === 'otp' ? $t('pin.otp_pairing') : $t('pin.pin_pairing') }}</h1>
+      </div>
+    </div>
+    <div class="pin-panel">
     <ul class="nav nav-pills justify-content-center mb-3">
       <li class="nav-item">
         <button class="nav-link" :class="{active: currentTab === 'otp'}" @click="currentTab = 'otp'">
@@ -14,8 +18,8 @@
         </button>
       </li>
     </ul>
-    <form v-if="currentTab === 'pin'" class="form d-flex flex-column align-items-center" id="form" @submit.prevent="registerDevice">
-      <div class="card flex-column d-flex p-4 mb-4">
+    <form v-if="currentTab === 'pin'" class="form d-flex flex-column align-items-center pin-form" id="form" @submit.prevent="registerDevice">
+      <div class="card flex-column d-flex p-4 mb-4 w-100">
         <div class="input-group mt-2">
           <label for="pairing-input" class="visually-hidden">{{ $t('pin.select_pairing') }}</label>
           <span class="input-group-text">
@@ -59,8 +63,8 @@
         </button>
       </div>
     </form>
-    <form v-else class="form d-flex flex-column align-items-center" @submit.prevent="requestOTP">
-      <div class="card flex-column d-flex p-4 mb-4">
+    <form v-else class="form d-flex flex-column align-items-center pin-form" @submit.prevent="requestOTP">
+      <div class="card flex-column d-flex p-4 mb-4 w-100">
         <div class="input-group mt-2">
           <label for="otp-passphrase" class="visually-hidden">{{ $t('pin.otp_passphrase') }}</label>
           <span class="input-group-text">
@@ -96,11 +100,11 @@
       {{ $t('pin.device_management') }}
     </RouterLink>
     <div v-if="status" :class="`alert alert-${status.type}`" role="alert">{{ status.message }}</div>
+    </div>
   </div>
 </template>
 
 <script>
-  import Navbar from './Navbar.vue'
   import { apiFetch } from './fetch_utils'
   import {
     Forward,
@@ -113,7 +117,6 @@
 
   export default {
     components: {
-      Navbar,
       Forward,
       Hash,
       KeyRound,

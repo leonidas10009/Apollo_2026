@@ -7,11 +7,12 @@ export const getPreferredTheme = () => {
         return storedTheme
     }
 
-    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+    return 'apollo'
 }
 
 // Define which themes are dark (for Bootstrap compatibility)
 const darkThemes = new Set([
+    'apollo',
     'dark',
     'dracula',
     'ember',

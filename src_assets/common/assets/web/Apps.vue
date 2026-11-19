@@ -1,5 +1,4 @@
 <template>
-  <Navbar></Navbar>
   <div id="content" class="container">
     <div class="my-4">
       <h1>{{ $t('apps.applications_title') }}<span v-if="apps.length"> ({{ appCountLabel }})</span></h1>
@@ -77,7 +76,7 @@
           </div>
           <div class="card-body d-flex flex-column">
             <h5 class="card-title mb-3">{{ app.name }}</h5>
-            <div class="mt-auto d-flex gap-2 flex-wrap">
+            <div class="mt-auto app-card-actions">
               <button v-if="currentApp === app.uuid" class="btn btn-sm btn-warning flex-fill" @click="closeApp">
                 <square :size="16" class="icon"></square>
                 {{ $t('apps.close') }}
@@ -90,7 +89,7 @@
                 <edit :size="16" class="icon"></edit>
                 {{ $t('apps.edit') }}
               </button>
-              <button class="btn btn-sm btn-danger" @click="showDeleteModal(index)">
+              <button class="btn btn-sm btn-outline-danger w-100" @click="showDeleteModal(index)">
                 <trash-2 :size="16" class="icon"></trash-2>
               </button>
             </div>
@@ -645,7 +644,6 @@
 
 <script>
   import { toRaw } from 'vue'
-  import Navbar from './Navbar.vue'
   import Checkbox from './Checkbox.vue'
   import { apiFetch } from './fetch_utils'
   import SunshineVersion from './sunshine_version'
@@ -734,7 +732,6 @@
 
   export default {
     components: {
-      Navbar,
       Checkbox,
       ArrowDown,
       ArrowRight,
