@@ -10,16 +10,33 @@
 #include "crypto.h"
 
 namespace crypto {
-  using asn1_string_t = util::safe_ptr<ASN1_STRING, ASN1_STRING_free>;
+  /**
+   * @brief OpenSSL ASN.1 string pointer with automatic release.
+   */
+  using asn1_string_t = util::safe_ptr<ASN1_STRING, &ASN1_STRING_free>;
+  /**
+   * @brief OpenSSL X.509 subject/issuer name pointer with automatic release.
+   */
+  using x509_name_t = util::safe_ptr<X509_NAME, &X509_NAME_free>;
+  constexpr char UNPAIRED_CERTIFICATE_ERROR[] = "Client certificate identity is not paired";  ///< Error returned when no exact stored certificate matches.
 
-  cert_chain_t::cert_chain_t():
-      _certs {}, _cert_ctx { X509_STORE_CTX_new() } {
-  }
+  cert_chain_t::cert_chain_t() = default;
+
   void cert_chain_t::add(p_named_cert_t& named_cert_p) {
-    x509_store_t x509_store { X509_STORE_new() };
+    auto cert = x509(named_cert_p->cert);
+    if (!cert) {
+      return;
+    }
 
-    X509_STORE_add_cert(x509_store.get(), x509(named_cert_p->cert).get());
-    _certs.emplace_back(std::make_pair(named_cert_p, std::move(x509_store)));
+    x509_store_t x509_store {X509_STORE_new()};
+    X509_STORE_add_cert(x509_store.get(), cert.get());
+    _certs.push_back({named_cert_p, std::move(cert), std::move(x509_store)});
+  }
+
+  void cert_chain_t::add(x509_t &&cert) {
+    x509_store_t x509_store {X509_STORE_new()};
+    X509_STORE_add_cert(x509_store.get(), cert.get());
+    _certs.push_back({{}, std::move(cert), std::move(x509_store)});
   }
 
   void cert_chain_t::clear() {
@@ -50,11 +67,12 @@ namespace crypto {
    *
    * To circumvent this, x509_store_t instance will be created for each instance of the certificates.
    * @param cert The certificate to verify.
+   * @param named_cert_out The paired client record that owns the matching certificate, if any.
    * @return nullptr if the certificate is valid, otherwise an error string.
    */
-  const char * cert_chain_t::verify(x509_t::element_type *cert, p_named_cert_t& named_cert_out) {
+  const char *cert_chain_t::verify(x509_t::element_type *cert, p_named_cert_t &named_cert_out) {
     int err_code = 0;
-    for (auto &[named_cert_p, x509_store] : _certs) {
+    for (auto &[named_cert_p, trusted_cert, x509_store] : _certs) {
       auto fg = util::fail_guard([this]() {
         X509_STORE_CTX_cleanup(_cert_ctx.get());
       });
@@ -67,11 +85,14 @@ namespace crypto {
       // that OpenSSL doesn't detect as self-signed due to some X509v3 extensions.
       X509_STORE_CTX_set_flags(_cert_ctx.get(), X509_V_FLAG_PARTIAL_CHAIN);
 
-      auto err = X509_verify_cert(_cert_ctx.get());
+      if (auto err = X509_verify_cert(_cert_ctx.get()); err == 1) {
+        if (X509_cmp(trusted_cert.get(), cert) == 0) {
+          named_cert_out = named_cert_p;
+          return nullptr;
+        }
 
-      if (err == 1) {
-        named_cert_out = named_cert_p;
-        return nullptr;
+        err_code = X509_V_ERR_CERT_REJECTED;
+        continue;
       }
 
       err_code = X509_STORE_CTX_get_error(_cert_ctx.get());
@@ -81,7 +102,7 @@ namespace crypto {
       }
     }
 
-    return X509_verify_cert_error_string(err_code);
+    return err_code == 0 ? UNPAIRED_CERTIFICATE_ERROR : X509_verify_cert_error_string(err_code);
   }
 
   namespace cipher {
@@ -97,7 +118,7 @@ namespace crypto {
         return -1;
       }
 
-      if (EVP_CIPHER_CTX_ctrl(ctx.get(), EVP_CTRL_GCM_SET_IVLEN, iv->size(), nullptr) != 1) {
+      if (EVP_CIPHER_CTX_ctrl(ctx.get(), EVP_CTRL_GCM_SET_IVLEN, (int) iv->size(), nullptr) != 1) {
         return -1;
       }
 
@@ -117,7 +138,7 @@ namespace crypto {
         return -1;
       }
 
-      if (EVP_CIPHER_CTX_ctrl(ctx.get(), EVP_CTRL_GCM_SET_IVLEN, iv->size(), nullptr) != 1) {
+      if (EVP_CIPHER_CTX_ctrl(ctx.get(), EVP_CTRL_GCM_SET_IVLEN, (int) iv->size(), nullptr) != 1) {
         return -1;
       }
 
@@ -158,13 +179,14 @@ namespace crypto {
 
       plaintext.resize(round_to_pkcs7_padded(cipher.size()));
 
-      int update_outlen, final_outlen;
+      int final_outlen;
+      int update_outlen;
 
-      if (EVP_DecryptUpdate(decrypt_ctx.get(), plaintext.data(), &update_outlen, (const std::uint8_t *) cipher.data(), cipher.size()) != 1) {
+      if (EVP_DecryptUpdate(decrypt_ctx.get(), plaintext.data(), &update_outlen, (const std::uint8_t *) cipher.data(), (int) cipher.size()) != 1) {
         return -1;
       }
 
-      if (EVP_CIPHER_CTX_ctrl(decrypt_ctx.get(), EVP_CTRL_GCM_SET_TAG, tag.size(), const_cast<char *>(tag.data())) != 1) {
+      if (EVP_CIPHER_CTX_ctrl(decrypt_ctx.get(), EVP_CTRL_GCM_SET_TAG, (int) tag.size(), const_cast<char *>(tag.data())) != 1) {
         return -1;
       }
 
@@ -192,10 +214,11 @@ namespace crypto {
         return -1;
       }
 
-      int update_outlen, final_outlen;
+      int final_outlen;
+      int update_outlen;
 
       // Encrypt into the caller's buffer
-      if (EVP_EncryptUpdate(encrypt_ctx.get(), ciphertext, &update_outlen, (const std::uint8_t *) plaintext.data(), plaintext.size()) != 1) {
+      if (EVP_EncryptUpdate(encrypt_ctx.get(), ciphertext, &update_outlen, (const std::uint8_t *) plaintext.data(), (int) plaintext.size()) != 1) {
         return -1;
       }
 
@@ -229,9 +252,10 @@ namespace crypto {
       EVP_CIPHER_CTX_set_padding(decrypt_ctx.get(), padding);
       plaintext.resize(round_to_pkcs7_padded(cipher.size()));
 
-      int update_outlen, final_outlen;
+      int final_outlen;
+      int update_outlen;
 
-      if (EVP_DecryptUpdate(decrypt_ctx.get(), plaintext.data(), &update_outlen, (const std::uint8_t *) cipher.data(), cipher.size()) != 1) {
+      if (EVP_DecryptUpdate(decrypt_ctx.get(), plaintext.data(), &update_outlen, (const std::uint8_t *) cipher.data(), (int) cipher.size()) != 1) {
         return -1;
       }
 
@@ -256,10 +280,11 @@ namespace crypto {
       EVP_CIPHER_CTX_set_padding(encrypt_ctx.get(), padding);
       cipher.resize(round_to_pkcs7_padded(plaintext.size()));
 
-      int update_outlen, final_outlen;
+      int final_outlen;
+      int update_outlen;
 
       // Encrypt into the caller's buffer
-      if (EVP_EncryptUpdate(encrypt_ctx.get(), cipher.data(), &update_outlen, (const std::uint8_t *) plaintext.data(), plaintext.size()) != 1) {
+      if (EVP_EncryptUpdate(encrypt_ctx.get(), cipher.data(), &update_outlen, (const std::uint8_t *) plaintext.data(), (int) plaintext.size()) != 1) {
         return -1;
       }
 
@@ -287,10 +312,11 @@ namespace crypto {
         return false;
       }
 
-      int update_outlen, final_outlen;
+      int final_outlen;
+      int update_outlen;
 
       // Encrypt into the caller's buffer
-      if (EVP_EncryptUpdate(encrypt_ctx.get(), cipher, &update_outlen, (const std::uint8_t *) plaintext.data(), plaintext.size()) != 1) {
+      if (EVP_EncryptUpdate(encrypt_ctx.get(), cipher, &update_outlen, (const std::uint8_t *) plaintext.data(), (int) plaintext.size()) != 1) {
         return -1;
       }
 
@@ -301,20 +327,23 @@ namespace crypto {
       return update_outlen + final_outlen;
     }
 
-    ecb_t::ecb_t(const aes_t &key, bool padding):
-        cipher_t {EVP_CIPHER_CTX_new(), EVP_CIPHER_CTX_new(), key, padding} {
+    ecb_t::ecb_t(const aes_t &key_material, bool use_padding):
+        cipher_t {cipher_ctx_t {EVP_CIPHER_CTX_new()}, cipher_ctx_t {EVP_CIPHER_CTX_new()}, key_material, use_padding} {
     }
 
-    cbc_t::cbc_t(const aes_t &key, bool padding):
-        cipher_t {nullptr, nullptr, key, padding} {
+    cbc_t::cbc_t(const aes_t &key_material, bool use_padding):
+        cipher_t {nullptr, nullptr, key_material, use_padding} {
     }
 
-    gcm_t::gcm_t(const crypto::aes_t &key, bool padding):
-        cipher_t {nullptr, nullptr, key, padding} {
+    gcm_t::gcm_t(const crypto::aes_t &key_material, bool use_padding):
+        cipher_t {nullptr, nullptr, key_material, use_padding} {
     }
 
   }  // namespace cipher
 
+  /**
+   * @brief Derive the AES key used by the pairing protocol.
+   */
   aes_t gen_aes_key(const std::array<uint8_t, 16> &salt, const std::string_view &pin) {
     aes_t key(16);
 
@@ -337,10 +366,13 @@ namespace crypto {
     return hsh;
   }
 
+  /**
+   * @brief Parse PEM text into an X.509 certificate object.
+   */
   x509_t x509(const std::string_view &x) {
     bio_t io {BIO_new(BIO_s_mem())};
 
-    BIO_write(io.get(), x.data(), x.size());
+    BIO_write(io.get(), x.data(), (int) x.size());
 
     x509_t p;
     PEM_read_bio_X509(io.get(), &p, nullptr, nullptr);
@@ -348,10 +380,13 @@ namespace crypto {
     return p;
   }
 
+  /**
+   * @brief Parse PEM text into an OpenSSL private key object.
+   */
   pkey_t pkey(const std::string_view &k) {
     bio_t io {BIO_new(BIO_s_mem())};
 
-    BIO_write(io.get(), k.data(), k.size());
+    BIO_write(io.get(), k.data(), (int) k.size());
 
     pkey_t p = nullptr;
     PEM_read_bio_PrivateKey(io.get(), &p, nullptr, nullptr);
@@ -359,6 +394,9 @@ namespace crypto {
     return p;
   }
 
+  /**
+   * @brief Serialize an OpenSSL object to PEM text.
+   */
   std::string pem(x509_t &x509) {
     bio_t bio {BIO_new(BIO_s_mem())};
 
@@ -369,6 +407,9 @@ namespace crypto {
     return {mem_ptr->data, mem_ptr->length};
   }
 
+  /**
+   * @brief Serialize an OpenSSL object to PEM text.
+   */
   std::string pem(pkey_t &pkey) {
     bio_t bio {BIO_new(BIO_s_mem())};
 
@@ -379,24 +420,45 @@ namespace crypto {
     return {mem_ptr->data, mem_ptr->length};
   }
 
+  /**
+   * @brief Return the certificate signature bytes.
+   */
   std::string_view signature(const x509_t &x) {
-    // X509_ALGOR *_ = nullptr;
-
     const ASN1_BIT_STRING *asn1 = nullptr;
     X509_get0_signature(&asn1, nullptr, x.get());
 
-    return {(const char *) asn1->data, (std::size_t) asn1->length};
+#if OPENSSL_VERSION_NUMBER >= 0x40100000L
+    const auto length = ASN1_STRING_get_length(asn1);
+#else
+    const auto length = static_cast<std::size_t>(ASN1_STRING_length(asn1));
+#endif
+
+    return {
+      reinterpret_cast<const char *>(ASN1_STRING_get0_data(asn1)),
+      length
+    };
   }
 
+  /**
+   * @brief Generate cryptographically secure random bytes.
+   */
   std::string rand(std::size_t bytes) {
     std::string r;
     r.resize(bytes);
 
-    RAND_bytes((uint8_t *) r.data(), r.size());
+    RAND_bytes((uint8_t *) r.data(), (int) r.size());
 
     return r;
   }
 
+  /**
+   * @brief Sign data with the requested OpenSSL digest.
+   *
+   * @param pkey Private key PEM data or private key file path.
+   * @param data Payload or state data to serialize, deserialize, or forward.
+   * @param md OpenSSL message digest algorithm used for signing or verification.
+   * @return Number of bytes written, signature bytes, or an error status depending on the overload.
+   */
   std::vector<uint8_t> sign(const pkey_t &pkey, const std::string_view &data, const EVP_MD *md) {
     md_ctx_t ctx {EVP_MD_CTX_create()};
 
@@ -421,6 +483,9 @@ namespace crypto {
     return digest;
   }
 
+  /**
+   * @brief Generate a self-signed certificate and private key for Sunshine pairing.
+   */
   creds_t gen_creds(const std::string_view &cn, std::uint32_t key_bits) {
     x509_t x509 {X509_new()};
     pkey_ctx_t ctx {EVP_PKEY_CTX_new_id(EVP_PKEY_RSA, nullptr)};
@@ -455,19 +520,32 @@ namespace crypto {
 
     X509_set_pubkey(x509.get(), pkey.get());
 
-    auto name = X509_get_subject_name(x509.get());
-    X509_NAME_add_entry_by_txt(name, "CN", MBSTRING_ASC, (const std::uint8_t *) cn.data(), cn.size(), -1, 0);
+    x509_name_t name {X509_NAME_new()};
+    X509_NAME_add_entry_by_txt(name.get(), "CN", MBSTRING_ASC, reinterpret_cast<const std::uint8_t *>(cn.data()), (int) cn.size(), -1, 0);
 
-    X509_set_issuer_name(x509.get(), name);
+    X509_set_subject_name(x509.get(), name.get());
+    X509_set_issuer_name(x509.get(), name.get());
     X509_sign(x509.get(), pkey.get(), EVP_sha256());
 
     return {pem(x509), pem(pkey)};
   }
 
+  /**
+   * @brief Sign data with SHA-256.
+   */
   std::vector<uint8_t> sign256(const pkey_t &pkey, const std::string_view &data) {
     return sign(pkey, data, EVP_sha256());
   }
 
+  /**
+   * @brief Verify a signature against certificate public key data.
+   *
+   * @param x509 X.509 certificate object or PEM data.
+   * @param data Payload or state data to serialize, deserialize, or forward.
+   * @param signature Signature bytes to verify or encode.
+   * @param md OpenSSL message digest algorithm used for signing or verification.
+   * @return True when OpenSSL verifies the signature with the supplied digest.
+   */
   bool verify(const x509_t &x509, const std::string_view &data, const std::string_view &signature, const EVP_MD *md) {
     auto pkey = X509_get0_pubkey(x509.get());
 
@@ -488,14 +566,23 @@ namespace crypto {
     return true;
   }
 
+  /**
+   * @brief Verify a SHA-256 signature with the certificate public key.
+   */
   bool verify256(const x509_t &x509, const std::string_view &data, const std::string_view &signature) {
     return verify(x509, data, signature, EVP_sha256());
   }
 
+  /**
+   * @brief Destroy an OpenSSL message digest context.
+   */
   void md_ctx_destroy(EVP_MD_CTX *ctx) {
     EVP_MD_CTX_destroy(ctx);
   }
 
+  /**
+   * @brief Generate random text from the supplied alphabet.
+   */
   std::string rand_alphabet(std::size_t bytes, const std::string_view &alphabet) {
     auto value = rand(bytes);
 

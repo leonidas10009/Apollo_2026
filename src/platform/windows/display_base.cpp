@@ -3,29 +3,45 @@
  * @brief Definitions for the Windows display base code.
  */
 // standard includes
+#include <array>
 #include <cmath>
 #include <thread>
+#include <utility>
 
 // platform includes
 #include <initguid.h>
+
+// local includes required before library includes
+// Boost.Process must be included before MinHook pulls in Windows.h so Boost.Asio sees WinSock2.h first.
+#include "src/compat/boost_process.h"
 
 // lib includes
 #include <boost/algorithm/string/join.hpp>
 #include <MinHook.h>
 
-// We have to include boost/process/v1.hpp before display.h due to WinSock.h,
-// but that prevents the definition of NTSTATUS so we must define it ourself.
-typedef long NTSTATUS;
+// local includes
+#include "utf_utils.h"
+
+// Including Boost.Process before Windows.h prevents the definition of NTSTATUS, so we must define it ourselves.
+/**
+ * @brief Windows NT status code returned by native APIs.
+ */
+using NTSTATUS = long;
 
 // Definition from the WDK's d3dkmthk.h
-typedef enum _D3DKMT_GPU_PREFERENCE_QUERY_STATE: DWORD {
+/**
+ * @brief Enumerates supported d3 DKMT GPU PREFERENCE QUERY STATE options.
+ */
+enum _D3DKMT_GPU_PREFERENCE_QUERY_STATE : DWORD {
   D3DKMT_GPU_PREFERENCE_STATE_UNINITIALIZED,  ///< The GPU preference isn't initialized.
   D3DKMT_GPU_PREFERENCE_STATE_HIGH_PERFORMANCE,  ///< The highest performing GPU is preferred.
   D3DKMT_GPU_PREFERENCE_STATE_MINIMUM_POWER,  ///< The minimum-powered GPU is preferred.
   D3DKMT_GPU_PREFERENCE_STATE_UNSPECIFIED,  ///< A GPU preference isn't specified.
   D3DKMT_GPU_PREFERENCE_STATE_NOT_FOUND,  ///< A GPU preference isn't found.
   D3DKMT_GPU_PREFERENCE_STATE_USER_SPECIFIED_GPU  ///< A specific GPU is preferred.
-} D3DKMT_GPU_PREFERENCE_QUERY_STATE;
+};
+
+using D3DKMT_GPU_PREFERENCE_QUERY_STATE = _D3DKMT_GPU_PREFERENCE_QUERY_STATE;  ///< GPU preference query state reported by D3DKMT.
 
 #include "display.h"
 #include "misc.h"
@@ -119,7 +135,13 @@ namespace platf::dxgi {
     display->display_refresh_rate = dup_desc.ModeDesc.RefreshRate;
     double display_refresh_rate_decimal = (double) display->display_refresh_rate.Numerator / display->display_refresh_rate.Denominator;
     BOOST_LOG(info) << "Display refresh rate [" << display_refresh_rate_decimal << "Hz]";
-    BOOST_LOG(info) << "Requested frame rate [" << display->client_frame_rate << "fps]";
+    if (display->client_frame_rate_strict.Numerator > 0) {
+      int num = display->client_frame_rate_strict.Numerator;
+      int den = display->client_frame_rate_strict.Denominator;
+      BOOST_LOG(info) << "Requested frame rate [" << num << "/" << den << " exactly " << av_q2d(AVRational {num, den}) << " fps]";
+    } else {
+      BOOST_LOG(info) << "Requested frame rate [" << display->client_frame_rate << "fps]";
+    }
     display->display_refresh_rate_rounded = lround(display_refresh_rate_decimal);
     return 0;
   }
@@ -152,7 +174,7 @@ namespace platf::dxgi {
         return capture_e::reinit;
       default:
         BOOST_LOG(error) << "Couldn't acquire next frame [0x"sv << util::hex(status).to_string_view();
-        return capture_e::error;
+        return capture_e::capture_error;
     }
   }
 
@@ -164,27 +186,34 @@ namespace platf::dxgi {
     return capture_status;
   }
 
+  /**
+   * @brief Release the acquired desktop duplication frame and classify the DXGI result.
+   *
+   * @return Success, a required display reinitialization, or a capture error.
+   */
   capture_e duplication_t::release_frame() {
+    using enum platf::capture_e;
+
     if (!has_frame) {
-      return capture_e::ok;
+      return ok;
     }
 
     auto status = dup->ReleaseFrame();
     has_frame = false;
     switch (status) {
       case S_OK:
-        return capture_e::ok;
+        return ok;
 
       case DXGI_ERROR_INVALID_CALL:
         BOOST_LOG(warning) << "Duplication frame already released";
-        return capture_e::ok;
+        return ok;
 
       case DXGI_ERROR_ACCESS_LOST:
-        return capture_e::reinit;
+        return reinit;
 
       default:
         BOOST_LOG(error) << "Error while releasing duplication frame [0x"sv << util::hex(status).to_string_view();
-        return capture_e::error;
+        return capture_error;
     }
   }
 
@@ -194,6 +223,10 @@ namespace platf::dxgi {
 
   capture_e display_base_t::capture(const push_captured_image_cb_t &push_captured_image_cb, const pull_free_image_cb_t &pull_free_image_cb, bool *cursor) {
     auto adjust_client_frame_rate = [&]() -> DXGI_RATIONAL {
+      // Use exactly the requested rate if the client sent an X100 value
+      if (client_frame_rate_strict.Numerator > 0) {
+        return client_frame_rate_strict;
+      }
       // Adjust capture frame interval when display refresh rate is not integral but very close to requested fps.
       if (display_refresh_rate.Denominator > 1) {
         DXGI_RATIONAL candidate = display_refresh_rate;
@@ -310,7 +343,7 @@ namespace platf::dxgi {
 
       switch (status) {
         case platf::capture_e::reinit:
-        case platf::capture_e::error:
+        case platf::capture_e::capture_error:
         case platf::capture_e::interrupted:
           return status;
         case platf::capture_e::timeout:
@@ -324,7 +357,7 @@ namespace platf::dxgi {
           }
           break;
         default:
-          BOOST_LOG(error) << "Unrecognized capture status ["sv << (int) status << ']';
+          BOOST_LOG(error) << "Unrecognized capture status ["sv << std::to_underlying(status) << ']';
           return status;
       }
 
@@ -343,9 +376,11 @@ namespace platf::dxgi {
    * @param adapter The DXGI adapter to use for capture.
    * @param output The DXGI output to capture.
    * @param enumeration_only Specifies whether this test is occurring for display enumeration.
+   *
+   * @return True when Desktop Duplication can capture the requested output.
    */
   bool test_dxgi_duplication(adapter_t &adapter, output_t &output, bool enumeration_only) {
-    D3D_FEATURE_LEVEL featureLevels[] {
+    std::array<D3D_FEATURE_LEVEL, 7> featureLevels {
       D3D_FEATURE_LEVEL_11_1,
       D3D_FEATURE_LEVEL_11_0,
       D3D_FEATURE_LEVEL_10_1,
@@ -361,8 +396,8 @@ namespace platf::dxgi {
       D3D_DRIVER_TYPE_UNKNOWN,
       nullptr,
       D3D11_CREATE_DEVICE_FLAGS,
-      featureLevels,
-      sizeof(featureLevels) / sizeof(D3D_FEATURE_LEVEL),
+      featureLevels.data(),
+      featureLevels.size(),
       D3D11_SDK_VERSION,
       &device,
       nullptr,
@@ -434,7 +469,7 @@ namespace platf::dxgi {
     std::call_once(windows_cpp_once_flag, []() {
       DECLARE_HANDLE(DPI_AWARENESS_CONTEXT);
 
-      typedef BOOL (*User32_SetProcessDpiAwarenessContext)(DPI_AWARENESS_CONTEXT value);
+      using User32_SetProcessDpiAwarenessContext = BOOL (*)(DPI_AWARENESS_CONTEXT value);
 
       {
         auto user32 = LoadLibraryA("user32.dll");
@@ -466,8 +501,8 @@ namespace platf::dxgi {
       return -1;
     }
 
-    auto adapter_name = from_utf8(config::video.adapter_name);
-    auto output_name = from_utf8(display_name);
+    auto adapter_name = utf_utils::from_utf8(config::video.adapter_name);
+    auto output_name = utf_utils::from_utf8(display_name);
 
     adapter_t::pointer adapter_p;
     for (int tries = 0; tries < 2; ++tries) {
@@ -501,8 +536,7 @@ namespace platf::dxgi {
             height = desc.DesktopCoordinates.bottom - offset_y;
 
             display_rotation = desc.Rotation;
-            if (display_rotation == DXGI_MODE_ROTATION_ROTATE90 ||
-                display_rotation == DXGI_MODE_ROTATION_ROTATE270) {
+            if (display_rotation == DXGI_MODE_ROTATION_ROTATE90 || display_rotation == DXGI_MODE_ROTATION_ROTATE270) {
               width_before_rotation = height;
               height_before_rotation = width;
             } else {
@@ -541,7 +575,7 @@ namespace platf::dxgi {
       return -1;
     }
 
-    D3D_FEATURE_LEVEL featureLevels[] {
+    std::array<D3D_FEATURE_LEVEL, 7> featureLevels {
       D3D_FEATURE_LEVEL_11_1,
       D3D_FEATURE_LEVEL_11_0,
       D3D_FEATURE_LEVEL_10_1,
@@ -562,8 +596,8 @@ namespace platf::dxgi {
       D3D_DRIVER_TYPE_UNKNOWN,
       nullptr,
       D3D11_CREATE_DEVICE_FLAGS,
-      featureLevels,
-      sizeof(featureLevels) / sizeof(D3D_FEATURE_LEVEL),
+      featureLevels.data(),
+      featureLevels.size(),
       D3D11_SDK_VERSION,
       &device,
       &feature_level,
@@ -581,7 +615,7 @@ namespace platf::dxgi {
     DXGI_ADAPTER_DESC adapter_desc;
     adapter->GetDesc(&adapter_desc);
 
-    auto description = to_utf8(adapter_desc.Description);
+    auto description = utf_utils::to_utf8(adapter_desc.Description);
     BOOST_LOG(info)
       << std::endl
       << "Device Description : " << description << std::endl
@@ -602,8 +636,7 @@ namespace platf::dxgi {
       HANDLE token;
       LUID val;
 
-      if (OpenProcessToken(GetCurrentProcess(), flags, &token) &&
-          !!LookupPrivilegeValue(nullptr, SE_INC_BASE_PRIORITY_NAME, &val)) {
+      if (OpenProcessToken(GetCurrentProcess(), flags, &token) && !!LookupPrivilegeValue(nullptr, SE_INC_BASE_PRIORITY_NAME, &val)) {
         tp.PrivilegeCount = 1;
         tp.Privileges[0].Luid = val;
         tp.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
@@ -617,7 +650,7 @@ namespace platf::dxgi {
 
       HMODULE gdi32 = GetModuleHandleA("GDI32");
       if (gdi32) {
-        auto check_hags = [&](const LUID &adapter) -> bool {
+        auto check_hags = [&](const LUID &adapter_luid) {
           auto d3dkmt_open_adapter = (PD3DKMTOpenAdapterFromLuid) GetProcAddress(gdi32, "D3DKMTOpenAdapterFromLuid");
           auto d3dkmt_query_adapter_info = (PD3DKMTQueryAdapterInfo) GetProcAddress(gdi32, "D3DKMTQueryAdapterInfo");
           auto d3dkmt_close_adapter = (PD3DKMTCloseAdapter) GetProcAddress(gdi32, "D3DKMTCloseAdapter");
@@ -626,7 +659,7 @@ namespace platf::dxgi {
             return false;
           }
 
-          D3DKMT_OPENADAPTERFROMLUID d3dkmt_adapter = {adapter};
+          D3DKMT_OPENADAPTERFROMLUID d3dkmt_adapter = {.AdapterLuid = adapter_luid};
           if (FAILED(d3dkmt_open_adapter(&d3dkmt_adapter))) {
             BOOST_LOG(error) << "D3DKMTOpenAdapterFromLuid() failed while trying to determine GPU HAGS status";
             return false;
@@ -713,6 +746,12 @@ namespace platf::dxgi {
     }
 
     client_frame_rate = config.framerate;
+    client_frame_rate_strict = {0, 0};
+    if (config.framerateX100 > 0) {
+      const AVRational fps = ::video::framerate_to_rational(config);
+      client_frame_rate_strict = DXGI_RATIONAL {static_cast<UINT>(fps.num), static_cast<UINT>(fps.den)};
+    }
+
     dxgi::output6_t output6 {};
     status = output->QueryInterface(IID_IDXGIOutput6, (void **) &output6);
     if (SUCCEEDED(status)) {
@@ -808,7 +847,10 @@ namespace platf::dxgi {
     return true;
   }
 
-  const char *format_str[] = {
+  /**
+   * @brief Names for DXGI_FORMAT values used in diagnostic logging.
+   */
+  const std::array<const char *, 133> format_str = {
     "DXGI_FORMAT_UNKNOWN",
     "DXGI_FORMAT_R32G32B32A32_TYPELESS",
     "DXGI_FORMAT_R32G32B32A32_FLOAT",
@@ -951,7 +993,7 @@ namespace platf::dxgi {
   }
 
   const char *display_base_t::colorspace_to_string(DXGI_COLOR_SPACE_TYPE type) {
-    const char *type_str[] = {
+    std::array<const char *, 25> type_str = {
       "DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709",
       "DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709",
       "DXGI_COLOR_SPACE_RGB_STUDIO_G22_NONE_P709",
@@ -979,7 +1021,7 @@ namespace platf::dxgi {
       "DXGI_COLOR_SPACE_YCBCR_STUDIO_G24_TOPLEFT_P2020",
     };
 
-    if (type < ARRAYSIZE(type_str)) {
+    if (type < type_str.size()) {
       return type_str[type];
     } else {
       return "UNKNOWN";
@@ -1051,15 +1093,16 @@ namespace platf {
       return {};
     }
 
-    dxgi::adapter_t adapter;
-    for (int x = 0; factory->EnumAdapters1(x, &adapter) != DXGI_ERROR_NOT_FOUND; ++x) {
+    dxgi::adapter_t::pointer adapter_p;
+    for (int x = 0; factory->EnumAdapters1(x, &adapter_p) != DXGI_ERROR_NOT_FOUND; ++x) {
+      dxgi::adapter_t adapter {adapter_p};
       DXGI_ADAPTER_DESC1 adapter_desc;
       adapter->GetDesc1(&adapter_desc);
 
       BOOST_LOG(debug)
         << std::endl
         << "====== ADAPTER ====="sv << std::endl
-        << "Device Name      : "sv << to_utf8(adapter_desc.Description) << std::endl
+        << "Device Name      : "sv << utf_utils::to_utf8(adapter_desc.Description) << std::endl
         << "Device Vendor ID : 0x"sv << util::hex(adapter_desc.VendorId).to_string_view() << std::endl
         << "Device Device ID : 0x"sv << util::hex(adapter_desc.DeviceId).to_string_view() << std::endl
         << "Device Video Mem : "sv << adapter_desc.DedicatedVideoMemory / 1048576 << " MiB"sv << std::endl
@@ -1075,7 +1118,7 @@ namespace platf {
         DXGI_OUTPUT_DESC desc;
         output->GetDesc(&desc);
 
-        auto device_name = to_utf8(desc.DeviceName);
+        auto device_name = utf_utils::to_utf8(desc.DeviceName);
 
         auto width = desc.DesktopCoordinates.right - desc.DesktopCoordinates.left;
         auto height = desc.DesktopCoordinates.bottom - desc.DesktopCoordinates.top;
@@ -1097,13 +1140,14 @@ namespace platf {
   }
 
   /**
-   * @brief Returns if GPUs/drivers have changed since the last call to this function.
+   * @brief Check whether DXGI reports that adapter or driver enumeration is stale.
+   *
    * @return `true` if a change has occurred or if it is unknown whether a change occurred.
    */
   bool needs_encoder_reenumeration() {
     // Serialize access to the static DXGI factory
     static std::mutex reenumeration_state_lock;
-    auto lg = std::lock_guard(reenumeration_state_lock);
+    auto lg = std::scoped_lock(reenumeration_state_lock);
 
     // Keep a reference to the DXGI factory, which will keep track of changes internally.
     static dxgi::factory1_t factory;

@@ -1,19 +1,37 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import Checkbox from '../../Checkbox.vue'
+import {
+  Play,
+  Plus,
+  Shield,
+  Tag,
+  Terminal,
+  Trash2,
+  Undo,
+} from '@lucide/vue'
 
 const props = defineProps({
   platform: String,
   config: Object,
-  globalPrepCmd: Array,
-  globalStateCmd: Array,
-  serverCmd: Array
+  globalPrepCmd: {
+    type: Array,
+    default: () => []
+  },
+  globalStateCmd: {
+    type: Array,
+    default: () => []
+  },
+  serverCmd: {
+    type: Array,
+    default: () => []
+  }
 })
 
 const config = ref(props.config)
-const globalPrepCmd = ref(props.globalPrepCmd)
-const globalStateCmd = ref(props.globalStateCmd)
-const serverCmd = ref(props.serverCmd)
+const globalPrepCmd = ref(props.globalPrepCmd.length ? props.globalPrepCmd : props.config?.global_prep_cmd ?? [])
+const globalStateCmd = ref(props.globalStateCmd.length ? props.globalStateCmd : props.config?.global_state_cmd ?? [])
+const serverCmd = ref(props.serverCmd.length ? props.serverCmd : props.config?.server_cmd ?? [])
 
 const cmds = ref({
   prep: globalPrepCmd,
@@ -65,8 +83,8 @@ onMounted(() => {
         <option value="cs">Čeština (Czech)</option>
         <option value="de">Deutsch (German)</option>
         <option value="en">English</option>
-        <option value="en_GB">English, UK</option>
-        <option value="en_US">English, US</option>
+        <option value="en_GB">English, United Kingdom</option>
+        <option value="en_US">English, United States</option>
         <option value="es">Español (Spanish)</option>
         <option value="fr">Français (French)</option>
         <option value="hu">Magyar (Hungarian)</option>
@@ -111,27 +129,29 @@ onMounted(() => {
     </div>
 
     <!-- Global Prep/State Commands -->
-    <div v-for="type in ['prep', 'state']" :id="`global_${type}_cmd`" class="mb-3 d-flex flex-column">
-      <label class="form-label">{{ $t(`config.global_${type}_cmd`) }}</label>
+    <div v-for="type in ['prep', 'state']" :id="`global_${type}_cmd`" :key="type" class="mb-3 d-flex flex-column">
+      <div class="form-label">{{ $t(`config.global_${type}_cmd`) }}</div>
       <div class="form-text pre-wrap">{{ $t(`config.global_${type}_cmd_desc`) }}</div>
       <table class="table" v-if="cmds[type].length > 0">
         <thead>
         <tr>
-          <th scope="col"><i class="fas fa-play"></i> {{ $t('_common.do_cmd') }}</th>
-          <th scope="col"><i class="fas fa-undo"></i> {{ $t('_common.undo_cmd') }}</th>
+          <th scope="col"><Play :size="16" /> {{ $t('_common.do_cmd') }}</th>
+          <th scope="col"><Undo :size="16" /> {{ $t('_common.undo_cmd') }}</th>
           <th scope="col" v-if="platform === 'windows'">
-            <i class="fas fa-shield-alt"></i> {{ $t('_common.run_as') }}
+            <Shield :size="16" /> {{ $t('_common.run_as') }}
           </th>
           <th scope="col"></th>
         </tr>
         </thead>
         <tbody>
-        <tr v-for="(c, i) in cmds[type]">
+        <tr v-for="(c, i) in cmds[type]" :key="i">
           <td>
-            <input type="text" class="form-control monospace" v-model="c.do" />
+            <label :for="`${type}-cmd-do-${i}`" class="visually-hidden">{{ $t('_common.do_cmd') }}</label>
+            <input :id="`${type}-cmd-do-${i}`" type="text" class="form-control monospace" v-model="c.do" />
           </td>
           <td>
-            <input type="text" class="form-control monospace" v-model="c.undo" />
+            <label :for="`${type}-cmd-undo-${i}`" class="visually-hidden">{{ $t('_common.undo_cmd') }}</label>
+            <input :id="`${type}-cmd-undo-${i}`" type="text" class="form-control monospace" v-model="c.undo" />
           </td>
           <td v-if="platform === 'windows'" class="align-middle">
             <Checkbox :id="type + '-cmd-admin-' + i"
@@ -141,12 +161,12 @@ onMounted(() => {
                       v-model="c.elevated"
             ></Checkbox>
           </td>
-          <td class="text-end">
-            <button class="btn btn-danger me-2" @click="removeCmd(cmds[type], i)">
-              <i class="fas fa-trash"></i>
+          <td>
+            <button class="btn btn-danger" @click="removeCmd(cmds[type], i)">
+              <Trash2 :size="16" />
             </button>
             <button class="btn btn-success" @click="addCmd(cmds[type], prepCmdTemplate, i)">
-              <i class="fas fa-plus"></i>
+              <Plus :size="16" />
             </button>
           </td>
         </tr>
@@ -159,7 +179,7 @@ onMounted(() => {
 
     <!-- Server Commands -->
     <div id="server_cmd" class="mb-3 d-flex flex-column">
-      <label class="form-label">{{ $t('config.server_cmd') }}</label>
+      <div class="form-label">{{ $t('config.server_cmd') }}</div>
       <div class="form-text">{{ $t('config.server_cmd_desc') }}</div>
       <div class="form-text">
         <a href="https://github.com/ClassicOldSong/Apollo/wiki/Server-Commands" target="_blank">{{ $t('_common.learn_more') }}</a>
@@ -167,34 +187,38 @@ onMounted(() => {
       <table class="table" v-if="serverCmd.length > 0">
         <thead>
         <tr>
-          <th scope="col"><i class="fas fa-tag"></i> {{ $t('_common.cmd_name') }}</th>
-          <th scope="col"><i class="fas fa-terminal"></i> {{ $t('_common.cmd_val') }}</th>
+          <th scope="col"><Tag :size="16" /> {{ $t('_common.cmd_name') }}</th>
+          <th scope="col"><Terminal :size="16" /> {{ $t('_common.cmd_val') }}</th>
           <th scope="col" v-if="platform === 'windows'">
-            <i class="fas fa-shield-alt"></i> {{ $t('_common.run_as') }}
+            <Shield :size="16" /> {{ $t('_common.run_as') }}
           </th>
           <th scope="col"></th>
         </tr>
         </thead>
         <tbody>
-        <tr v-for="(c, i) in serverCmd">
+        <tr v-for="(c, i) in serverCmd" :key="i">
           <td>
-            <input type="text" class="form-control" v-model="c.name" />
+            <label :for="`server-cmd-name-${i}`" class="visually-hidden">{{ $t('_common.cmd_name') }}</label>
+            <input :id="`server-cmd-name-${i}`" type="text" class="form-control" v-model="c.name" />
           </td>
           <td>
-            <input type="text" class="form-control monospace" v-model="c.cmd" />
+            <label :for="`server-cmd-val-${i}`" class="visually-hidden">{{ $t('_common.cmd_val') }}</label>
+            <input :id="`server-cmd-val-${i}`" type="text" class="form-control monospace" v-model="c.cmd" />
           </td>
-          <td v-if="platform === 'windows'">
-            <div class="form-check">
-              <input type="checkbox" class="form-check-input" :id="'server-cmd-admin-' + i" v-model="c.elevated"/>
-              <label :for="'server-cmd-admin-' + i" class="form-check-label">{{ $t('_common.elevated') }}</label>
-            </div>
+          <td v-if="platform === 'windows'" class="align-middle">
+            <Checkbox :id="'server-cmd-admin-' + i"
+                      label="_common.elevated"
+                      desc=""
+                      default="false"
+                      v-model="c.elevated"
+            ></Checkbox>
           </td>
-          <td class="text-end">
-            <button class="btn btn-danger me-2" @click="removeCmd(serverCmd, i)">
-              <i class="fas fa-trash"></i>
+          <td>
+            <button class="btn btn-danger" @click="removeCmd(serverCmd, i)">
+              <Trash2 :size="16" />
             </button>
             <button class="btn btn-success" @click="addCmd(serverCmd, serverCmdTemplate, i)">
-              <i class="fas fa-plus"></i>
+              <Plus :size="16" />
             </button>
           </td>
         </tr>
@@ -246,7 +270,3 @@ onMounted(() => {
     ></Checkbox>
   </div>
 </template>
-
-<style scoped>
-
-</style>

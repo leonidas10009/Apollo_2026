@@ -3,10 +3,12 @@
  * @brief Definitions for logging related functions.
  */
 // standard includes
+#include <array>
 #include <fstream>
 #include <filesystem>
 #include <iomanip>
 #include <iostream>
+#include <utility>
 
 // lib includes
 #include <boost/core/null_deleter.hpp>
@@ -16,6 +18,7 @@
 #include <boost/log/expressions.hpp>
 #include <boost/log/sinks.hpp>
 #include <boost/log/sources/severity_logger.hpp>
+#include <boost/log/utility/exception_handler.hpp>
 
 // local includes
 #include "logging.h"
@@ -35,16 +38,16 @@ using namespace std::literals;
 
 namespace bl = boost::log;
 
-boost::shared_ptr<boost::log::sinks::asynchronous_sink<boost::log::sinks::text_ostream_backend>> sink;
+boost::shared_ptr<boost::log::sinks::asynchronous_sink<boost::log::sinks::text_ostream_backend>> sink;  ///< Sink.
 
-bl::sources::severity_logger<int> verbose(0);  // Dominating output
-bl::sources::severity_logger<int> debug(1);  // Follow what is happening
-bl::sources::severity_logger<int> info(2);  // Should be informed about
-bl::sources::severity_logger<int> warning(3);  // Strange events
-bl::sources::severity_logger<int> error(4);  // Recoverable errors
-bl::sources::severity_logger<int> fatal(5);  // Unrecoverable errors
+bl::sources::severity_logger<int> verbose {0};  ///< Dominating output.
+bl::sources::severity_logger<int> debug {1};  ///< Follow what is happening.
+bl::sources::severity_logger<int> info {2};  ///< Should be informed about.
+bl::sources::severity_logger<int> warning {3};  ///< Strange events.
+bl::sources::severity_logger<int> error {4};  ///< Recoverable errors.
+bl::sources::severity_logger<int> fatal {5};  ///< Unrecoverable errors.
 #ifdef SUNSHINE_TESTS
-bl::sources::severity_logger<int> tests(10);  // Automatic tests output
+bl::sources::severity_logger<int> tests {10};  ///< Automatic tests output.
 #endif
 
 BOOST_LOG_ATTRIBUTE_KEYWORD(severity, "Severity", int)
@@ -60,11 +63,14 @@ namespace logging {
     sink.reset();
   }
 
+  /**
+   * @brief Format a Boost.Log record for Sunshine log output.
+   */
   void formatter(const boost::log::record_view &view, boost::log::formatting_ostream &os) {
     constexpr const char *message = "Message";
-    constexpr const char *severity = "Severity";
+    constexpr const char *severity_attribute = "Severity";
 
-    auto log_level = view.attribute_values()[severity].extract<int>().get();
+    auto log_level = view.attribute_values()[severity_attribute].extract<int>().get();
 
     std::string_view log_type;
     switch (log_level) {
@@ -91,7 +97,7 @@ namespace logging {
         log_type = "Tests: "sv;
         break;
 #endif
-    };
+    }
 
     auto now = std::chrono::system_clock::now();
     auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -153,19 +159,9 @@ namespace logging {
       deinit();
     }
 
-    // Check if the log file exists and handle backup
-    std::string backup_log_file = log_file + ".backup";
-    if (std::filesystem::exists(log_file)) {
-      try {
-        // If the backup file exists, remove it
-        if (std::filesystem::exists(backup_log_file)) {
-          std::filesystem::remove(backup_log_file);
-        }
-        // Rename the current log file to the backup name
-        std::filesystem::rename(log_file, backup_log_file);
-      } catch (std::exception& e) {
-        std::cout << "Failed to rotate log file: " << e.what() << std::endl;
-      }
+    const auto log_path = std::filesystem::path {std::u8string {log_file.begin(), log_file.end()}};
+    if (const auto rotation_error = rotate_log_file(log_path)) {
+      std::cerr << "Failed to rotate log file '" << log_file << "': " << rotation_error.message() << '\n';
     }
 
 #ifndef __ANDROID__
@@ -183,6 +179,11 @@ namespace logging {
     sink->locked_backend()->add_stream(boost::make_shared<std::ofstream>(log_file));
     sink->set_filter(severity >= min_log_level);
     sink->set_formatter(&formatter);
+
+    // Prevent the async sink's background thread from dying on backend exceptions.
+    // Without this, a single I/O error (disk full, file locked, broken stdout, etc.)
+    // kills the thread and all subsequent log records are silently lost.
+    sink->set_exception_handler(bl::make_exception_suppressor());
 
     // Flush after each log record to ensure log file contents on disk isn't stale.
     // This is particularly important when running from a Windows service.
@@ -204,31 +205,31 @@ namespace logging {
     } else {
       av_log_set_level(AV_LOG_DEBUG);
     }
-    av_log_set_callback([](void *ptr, int level, const char *fmt, va_list vl) {
+    av_log_set_callback([](void *ptr, int level, const char *fmt, va_list vl) {  // NOSONAR(cpp:S5008): FFmpeg's av_log_set_callback requires a void pointer to its logging context.
       static int print_prefix = 1;
-      char buffer[1024];
+      std::array<char, 1024> buffer;
 
-      av_log_format_line(ptr, level, fmt, vl, buffer, sizeof(buffer), &print_prefix);
+      av_log_format_line(ptr, level, fmt, vl, buffer.data(), buffer.size(), &print_prefix);
       if (level <= AV_LOG_ERROR) {
         // We print AV_LOG_FATAL at the error level. FFmpeg prints things as fatal that
         // are expected in some cases, such as lack of codec support or similar things.
-        BOOST_LOG(error) << buffer;
+        BOOST_LOG(error) << buffer.data();
       } else if (level <= AV_LOG_WARNING) {
-        BOOST_LOG(warning) << buffer;
+        BOOST_LOG(warning) << buffer.data();
       } else if (level <= AV_LOG_INFO) {
-        BOOST_LOG(info) << buffer;
+        BOOST_LOG(info) << buffer.data();
       } else if (level <= AV_LOG_VERBOSE) {
         // AV_LOG_VERBOSE is less verbose than AV_LOG_DEBUG
-        BOOST_LOG(debug) << buffer;
+        BOOST_LOG(debug) << buffer.data();
       } else {
-        BOOST_LOG(verbose) << buffer;
+        BOOST_LOG(verbose) << buffer.data();
       }
     });
   }
 
   void setup_libdisplaydevice_logging(int min_log_level) {
-    constexpr int min_level {static_cast<int>(display_device::Logger::LogLevel::verbose)};
-    constexpr int max_level {static_cast<int>(display_device::Logger::LogLevel::fatal)};
+    constexpr int min_level {std::to_underlying(display_device::Logger::LogLevel::verbose)};
+    constexpr int max_level {std::to_underlying(display_device::Logger::LogLevel::fatal)};
     const auto log_level {static_cast<display_device::Logger::LogLevel>(std::min(std::max(min_level, min_log_level), max_level))};
 
     display_device::Logger::get().setLogLevel(log_level);

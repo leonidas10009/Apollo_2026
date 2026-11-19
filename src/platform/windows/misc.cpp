@@ -2,13 +2,27 @@
  * @file src/platform/windows/misc.cpp
  * @brief Miscellaneous definitions for Windows.
  */
+
+// TODO: Revisit this override when formalizing the Windows 11 minimum API target.
+#ifndef NTDDI_VERSION
+  /**
+   * @def NTDDI_VERSION
+   * @brief Target Windows 10 APIs before Boost or Windows headers select a default.
+   */
+  #define NTDDI_VERSION NTDDI_WIN10
+#endif
+
 // standard includes
+#include <array>
 #include <csignal>
 #include <filesystem>
+#include <format>
 #include <iomanip>
 #include <iterator>
 #include <set>
 #include <sstream>
+#include <utility>
+#include <vector>
 
 #ifndef BOOST_PROCESS_VERSION
  #define BOOST_PROCESS_VERSION 1
@@ -21,7 +35,12 @@
 #include <boost/process/v1/group.hpp>
 #include <boost/process/v1/environment.hpp>
 #include <boost/program_options/parsers.hpp>
+#include <boost/range/algorithm/find_if.hpp>
 
+// local includes required before platform includes
+#include "src/compat/boost_process.h"
+
+// platform includes
 // prevent clang format from "optimizing" the header include order
 // clang-format off
 #include <dwmapi.h>
@@ -36,12 +55,8 @@
 #include <WS2tcpip.h>
 #include <WtsApi32.h>
 #include <sddl.h>
-// clang-format on
-
-// Boost overrides NTDDI_VERSION, so we re-override it here
-#undef NTDDI_VERSION
-#define NTDDI_VERSION NTDDI_WIN10
 #include <Shlwapi.h>
+// clang-format on
 
 // local includes
 #include "misc.h"
@@ -51,46 +66,68 @@
 #include "src/globals.h"
 #include "src/logging.h"
 #include "src/platform/common.h"
+#include "src/platform/permissions.h"
 #include "src/utility.h"
+#include "utf_utils.h"
 
 // UDP_SEND_MSG_SIZE was added in the Windows 10 20H1 SDK
 #ifndef UDP_SEND_MSG_SIZE
+  /**
+   * @def UDP_SEND_MSG_SIZE
+   * @brief Macro for UDP SEND MSG SIZE.
+   */
   #define UDP_SEND_MSG_SIZE 2
 #endif
 
 // PROC_THREAD_ATTRIBUTE_JOB_LIST is currently missing from MinGW headers
 #ifndef PROC_THREAD_ATTRIBUTE_JOB_LIST
+  /**
+   * @def PROC_THREAD_ATTRIBUTE_JOB_LIST
+   * @brief Macro for PROC THREAD ATTRIBUTE JOB LIST.
+   */
   #define PROC_THREAD_ATTRIBUTE_JOB_LIST ProcThreadAttributeValue(13, FALSE, TRUE, FALSE)
 #endif
 
 #include <qos2.h>
 
 #ifndef WLAN_API_MAKE_VERSION
+  /**
+   * @def WLAN_API_MAKE_VERSION(_major, _minor)
+   * @brief Macro for WLAN API MAKE VERSION.
+   */
   #define WLAN_API_MAKE_VERSION(_major, _minor) (((DWORD) (_minor)) << 16 | (_major))
 #endif
 
 #include <winternl.h>
 extern "C" {
+  /**
+   * @brief Dynamically resolve NtSetTimerResolution from ntdll.
+   *
+   * @param DesiredResolution Desired resolution.
+   * @param SetResolution Set resolution.
+   * @param CurrentResolution Current resolution.
+   * @return NTSTATUS reported by the system timer-resolution request.
+   */
   NTSTATUS NTAPI NtSetTimerResolution(ULONG DesiredResolution, BOOLEAN SetResolution, PULONG CurrentResolution);
 }
 
 namespace {
 
-  std::atomic<bool> used_nt_set_timer_resolution = false;
+  std::atomic used_nt_set_timer_resolution = false;
 
   bool nt_set_timer_resolution_max() {
-    ULONG minimum, maximum, current;
-    if (!NT_SUCCESS(NtQueryTimerResolution(&minimum, &maximum, &current)) ||
-        !NT_SUCCESS(NtSetTimerResolution(maximum, TRUE, &current))) {
+    ULONG maximum;
+    ULONG minimum;
+    if (ULONG current; !NT_SUCCESS(NtQueryTimerResolution(&minimum, &maximum, &current)) || !NT_SUCCESS(NtSetTimerResolution(maximum, TRUE, &current))) {
       return false;
     }
     return true;
   }
 
   bool nt_set_timer_resolution_min() {
-    ULONG minimum, maximum, current;
-    if (!NT_SUCCESS(NtQueryTimerResolution(&minimum, &maximum, &current)) ||
-        !NT_SUCCESS(NtSetTimerResolution(minimum, TRUE, &current))) {
+    ULONG maximum;
+    ULONG minimum;
+    if (ULONG current; !NT_SUCCESS(NtQueryTimerResolution(&minimum, &maximum, &current)) || !NT_SUCCESS(NtSetTimerResolution(minimum, TRUE, &current))) {
       return false;
     }
     return true;
@@ -98,7 +135,7 @@ namespace {
 
 }  // namespace
 
-namespace bp = boost::process;
+namespace bp = boost::process::v1;
 
 static std::string ensureCrLf(const std::string& utf8Str);
 static std::wstring getClipboardData();
@@ -107,74 +144,97 @@ static int setClipboardData(const std::wstring& utf16Str);
 using namespace std::literals;
 
 namespace platf {
+  std::vector<permission_status_t> get_permission_statuses() {
+    return {{"config_directory", can_access_directory(appdata()) ? "granted" : "denied", true, true}};
+  }
+
+  bool request_permission(std::string_view id) {
+    // Windows does not offer a consent prompt for arbitrary directory ACLs.
+    // The Web UI shows the setup steps for this known permission.
+    (void) id;
+    return false;
+  }
+
+  /**
+   * @brief Owning pointer for `GetAdaptersAddresses` results.
+   */
   using adapteraddrs_t = util::c_ptr<IP_ADAPTER_ADDRESSES>;
 
-  bool enabled_mouse_keys = false;
-  MOUSEKEYS previous_mouse_keys_state;
+  bool enabled_mouse_keys = false;  ///< Tracks whether Windows Mouse Keys was enabled before Sunshine changed it.
+  MOUSEKEYS previous_mouse_keys_state;  ///< Previous mouse keys state.
 
-  HANDLE qos_handle = nullptr;
+  HANDLE qos_handle = nullptr;  ///< QoS handle.
 
-  decltype(QOSCreateHandle) *fn_QOSCreateHandle = nullptr;
-  decltype(QOSAddSocketToFlow) *fn_QOSAddSocketToFlow = nullptr;
-  decltype(QOSRemoveSocketFromFlow) *fn_QOSRemoveSocketFromFlow = nullptr;
+  decltype(QOSCreateHandle) *fn_QOSCreateHandle = nullptr;  ///< Fn QoS create handle.
+  decltype(QOSAddSocketToFlow) *fn_QOSAddSocketToFlow = nullptr;  ///< Fn QoS add socket to flow.
+  decltype(QOSRemoveSocketFromFlow) *fn_QOSRemoveSocketFromFlow = nullptr;  ///< Fn QoS remove socket from flow.
 
-  HANDLE wlan_handle = nullptr;
+  HANDLE wlan_handle = nullptr;  ///< Wlan handle.
 
-  decltype(WlanOpenHandle) *fn_WlanOpenHandle = nullptr;
-  decltype(WlanCloseHandle) *fn_WlanCloseHandle = nullptr;
-  decltype(WlanFreeMemory) *fn_WlanFreeMemory = nullptr;
-  decltype(WlanEnumInterfaces) *fn_WlanEnumInterfaces = nullptr;
-  decltype(WlanSetInterface) *fn_WlanSetInterface = nullptr;
+  decltype(WlanOpenHandle) *fn_WlanOpenHandle = nullptr;  ///< Fn wlan open handle.
+  decltype(WlanCloseHandle) *fn_WlanCloseHandle = nullptr;  ///< Fn wlan close handle.
+  decltype(WlanFreeMemory) *fn_WlanFreeMemory = nullptr;  ///< Fn wlan free memory.
+  decltype(WlanEnumInterfaces) *fn_WlanEnumInterfaces = nullptr;  ///< Fn wlan enum interfaces.
+  decltype(WlanSetInterface) *fn_WlanSetInterface = nullptr;  ///< Fn wlan set interface.
 
   std::filesystem::path appdata() {
-    WCHAR sunshine_path[MAX_PATH];
-    GetModuleFileNameW(nullptr, sunshine_path, _countof(sunshine_path));
-    return std::filesystem::path {sunshine_path}.remove_filename() / L"config"sv;
+    std::array<WCHAR, MAX_PATH> sunshine_path;
+    GetModuleFileNameW(nullptr, sunshine_path.data(), sunshine_path.size());
+    return std::filesystem::path {sunshine_path.data()}.remove_filename() / L"config"sv;
+  }
+
+  /**
+   * @brief XDG Portal token path (unused on Windows).
+   *
+   * @return Path of portal_token in appdata path.
+   */
+  std::filesystem::path get_xdg_restore_token_path() {
+    return appdata() / "portal_token";
   }
 
   std::string from_sockaddr(const sockaddr *const socket_address) {
-    char data[INET6_ADDRSTRLEN] = {};
+    std::array<char, INET6_ADDRSTRLEN> data = {};
 
-    auto family = socket_address->sa_family;
-    if (family == AF_INET6) {
-      inet_ntop(AF_INET6, &((sockaddr_in6 *) socket_address)->sin6_addr, data, INET6_ADDRSTRLEN);
+    if (auto family = socket_address->sa_family; family == AF_INET6) {
+      inet_ntop(AF_INET6, &((const sockaddr_in6 *) socket_address)->sin6_addr, data.data(), INET6_ADDRSTRLEN);
     } else if (family == AF_INET) {
-      inet_ntop(AF_INET, &((sockaddr_in *) socket_address)->sin_addr, data, INET_ADDRSTRLEN);
+      inet_ntop(AF_INET, &((const sockaddr_in *) socket_address)->sin_addr, data.data(), INET_ADDRSTRLEN);
     }
 
-    return std::string {data};
+    return std::string {data.data()};
   }
 
   std::pair<std::uint16_t, std::string> from_sockaddr_ex(const sockaddr *const ip_addr) {
-    char data[INET6_ADDRSTRLEN] = {};
-
     auto family = ip_addr->sa_family;
     std::uint16_t port = 0;
     if (family == AF_INET6) {
-      inet_ntop(AF_INET6, &((sockaddr_in6 *) ip_addr)->sin6_addr, data, INET6_ADDRSTRLEN);
-      port = ((sockaddr_in6 *) ip_addr)->sin6_port;
+      port = ((const sockaddr_in6 *) ip_addr)->sin6_port;
     } else if (family == AF_INET) {
-      inet_ntop(AF_INET, &((sockaddr_in *) ip_addr)->sin_addr, data, INET_ADDRSTRLEN);
-      port = ((sockaddr_in *) ip_addr)->sin_port;
+      port = ((const sockaddr_in *) ip_addr)->sin_port;
     }
 
-    return {port, std::string {data}};
+    return {port, from_sockaddr(ip_addr)};
   }
 
+  /**
+   * @brief Read Windows adapter addresses with automatic buffer sizing.
+   *
+   * @return Adapter-address list populated by GetAdaptersAddresses.
+   */
   adapteraddrs_t get_adapteraddrs() {
-    adapteraddrs_t info {nullptr};
+    adapteraddrs_t adapter_addresses {nullptr};
     ULONG size = 0;
 
-    while (GetAdaptersAddresses(AF_UNSPEC, 0, nullptr, info.get(), &size) == ERROR_BUFFER_OVERFLOW) {
-      info.reset((PIP_ADAPTER_ADDRESSES) malloc(size));
+    while (GetAdaptersAddresses(AF_UNSPEC, 0, nullptr, adapter_addresses.get(), &size) == ERROR_BUFFER_OVERFLOW) {
+      adapter_addresses.reset((PIP_ADAPTER_ADDRESSES) malloc(size));
     }
 
-    return info;
+    return adapter_addresses;
   }
 
   std::string get_mac_address(const std::string_view &address) {
-    adapteraddrs_t info = get_adapteraddrs();
-    for (auto adapter_pos = info.get(); adapter_pos != nullptr; adapter_pos = adapter_pos->Next) {
+    adapteraddrs_t adapter_addresses = get_adapteraddrs();
+    for (auto adapter_pos = adapter_addresses.get(); adapter_pos != nullptr; adapter_pos = adapter_pos->Next) {
       for (auto addr_pos = adapter_pos->FirstUnicastAddress; addr_pos != nullptr; addr_pos = addr_pos->Next) {
         if (adapter_pos->PhysicalAddressLength != 0 && address == from_sockaddr(addr_pos->Address.lpSockaddr)) {
           std::stringstream mac_addr;
@@ -248,6 +308,9 @@ namespace platf {
     return local_ip;
   }
 
+  /**
+   * @brief Synchronize thread desktop.
+   */
   HDESK syncThreadDesktop() {
     auto hDesk = OpenInputDesktop(DF_ALLOWOTHERACCOUNTHOOK, FALSE, GENERIC_ALL);
     if (!hDesk) {
@@ -267,14 +330,23 @@ namespace platf {
     return hDesk;
   }
 
+  /**
+   * @brief Write status details to the log.
+   */
   void print_status(const std::string_view &prefix, HRESULT status) {
-    char err_string[1024];
+    std::array<char, 1024> err_string;
 
-    DWORD bytes = FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, nullptr, status, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), err_string, sizeof(err_string), nullptr);
+    DWORD bytes = FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, nullptr, status, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), err_string.data(), err_string.size(), nullptr);
 
-    BOOST_LOG(error) << prefix << ": "sv << std::string_view {err_string, bytes};
+    BOOST_LOG(error) << prefix << ": "sv << std::string_view {err_string.data(), bytes};
   }
 
+  /**
+   * @brief Check whether a Windows access token belongs to an administrator.
+   *
+   * @param user_token Windows access token to inspect.
+   * @return True when the inspected token has administrator privileges.
+   */
   bool IsUserAdmin(HANDLE user_token) {
     WINBOOL ret;
     SID_IDENTIFIER_AUTHORITY NtAuthority = SECURITY_NT_AUTHORITY;
@@ -308,6 +380,8 @@ namespace platf {
   /**
    * @brief Obtain the current sessions user's primary token with elevated privileges.
    * @return The user's token. If user has admin capability it will be elevated, otherwise it will be a limited token. On error, `nullptr`.
+   *
+   * @param elevated Whether the command should run with elevated privileges.
    */
   HANDLE retrieve_users_token(bool elevated) {
     DWORD consoleSessionId;
@@ -370,6 +444,15 @@ namespace platf {
     return userToken;
   }
 
+  /**
+   * @brief Merge user environment variables into a Windows environment block.
+   *
+   * Existing variable names retain their spelling when matched case-insensitively.
+   *
+   * @param env Environment variables for the child process.
+   * @param shell_token Shell token.
+   * @return True when the user environment block was merged into `env`.
+   */
   bool merge_user_environment_block(bp::environment &env, HANDLE shell_token) {
     // Get the target user's environment block
     PVOID env_block;
@@ -380,15 +463,15 @@ namespace platf {
     // Parse the environment block and populate env
     for (auto c = (PWCHAR) env_block; *c != UNICODE_NULL; c += wcslen(c) + 1) {
       // Environment variable entries end with a null-terminator, so std::wstring() will get an entire entry.
-      std::string env_tuple = to_utf8(std::wstring {c});
+      std::string env_tuple = utf_utils::to_utf8(std::wstring {c});
       std::string env_name = env_tuple.substr(0, env_tuple.find('='));
       std::string env_val = env_tuple.substr(env_tuple.find('=') + 1);
 
       // Perform a case-insensitive search to see if this variable name already exists
-      auto itr = std::find_if(env.cbegin(), env.cend(), [&](const auto &e) {
-        return boost::iequals(e.get_name(), env_name);
-      });
-      if (itr != env.cend()) {
+      if (auto itr = boost::range::find_if(env, [&env_name](const auto &e) {
+            return boost::iequals(e.get_name(), env_name);
+          });
+          itr != env.end()) {
         // Use this existing name if it is already present to ensure we merge properly
         env_name = itr->get_name();
       }
@@ -440,40 +523,62 @@ namespace platf {
   }
 
   // Note: This does NOT append a null terminator
+  /**
+   * @brief Append a null-terminated string to a Windows environment block.
+   *
+   * @param env_block Env block.
+   * @param offset Byte offset used when converting from the wide string buffer.
+   * @param wstr Wide-character string being converted to UTF-8.
+   */
   void append_string_to_environment_block(wchar_t *env_block, int &offset, const std::wstring &wstr) {
     std::memcpy(&env_block[offset], wstr.data(), wstr.length() * sizeof(wchar_t));
     offset += wstr.length();
   }
 
-  std::wstring create_environment_block(bp::environment &env) {
+  /**
+   * @brief Create environment block.
+   *
+   * @param env Environment variables for the child process.
+   * @return Created environment block object or status.
+   */
+  std::wstring create_environment_block(const bp::environment &env) {
     int size = 0;
     for (const auto &entry : env) {
       auto name = entry.get_name();
       auto value = entry.to_string();
-      size += from_utf8(name).length() + 1 /* L'=' */ + from_utf8(value).length() + 1 /* L'\0' */;
+      size += utf_utils::from_utf8(name).length() + 1 /* L'=' */ + utf_utils::from_utf8(value).length() + 1 /* L'\0' */;
     }
 
     size += 1 /* L'\0' */;
 
-    wchar_t env_block[size];
+    std::vector<wchar_t> env_block(size);
     int offset = 0;
     for (const auto &entry : env) {
       auto name = entry.get_name();
       auto value = entry.to_string();
 
       // Construct the NAME=VAL\0 string
-      append_string_to_environment_block(env_block, offset, from_utf8(name));
-      env_block[offset++] = L'=';
-      append_string_to_environment_block(env_block, offset, from_utf8(value));
-      env_block[offset++] = L'\0';
+      append_string_to_environment_block(env_block.data(), offset, utf_utils::from_utf8(name));
+      env_block[offset] = L'=';
+      offset++;
+      append_string_to_environment_block(env_block.data(), offset, utf_utils::from_utf8(value));
+      env_block[offset] = L'\0';
+      offset++;
     }
 
     // Append a final null terminator
-    env_block[offset++] = L'\0';
+    env_block[offset] = L'\0';
+    offset++;
 
-    return std::wstring(env_block, offset);
+    return std::wstring(env_block.data(), offset);
   }
 
+  /**
+   * @brief Allocate and initialize a Windows process-thread attribute list.
+   *
+   * @param attribute_count Attribute count.
+   * @return Initialized attribute list, or nullptr when allocation fails.
+   */
   LPPROC_THREAD_ATTRIBUTE_LIST allocate_proc_thread_attr_list(DWORD attribute_count) {
     SIZE_T size;
     InitializeProcThreadAttributeList(nullptr, attribute_count, 0, &size);
@@ -491,6 +596,11 @@ namespace platf {
     return list;
   }
 
+  /**
+   * @brief Release proc thread attr list resources.
+   *
+   * @param list Multi-string list returned by the Windows API.
+   */
   void free_proc_thread_attr_list(LPPROC_THREAD_ATTRIBUTE_LIST list) {
     DeleteProcThreadAttributeList(list);
     HeapFree(GetProcessHeap(), 0, list);
@@ -592,7 +702,7 @@ namespace platf {
 
     if (file) {
       // If a file was provided, get its handle and use it as the standard output and error for the new process
-      HANDLE log_file_handle = (HANDLE) _get_osfhandle(_fileno(file));
+      auto log_file_handle = (HANDLE) _get_osfhandle(_fileno(file));
 
       // Populate std handles if the caller gave us a log file to use
       startup_info.StartupInfo.dwFlags |= STARTF_USESTDHANDLES;
@@ -742,41 +852,50 @@ namespace platf {
    * @return A command string suitable for use by CreateProcess().
    */
   std::wstring resolve_command_string(const std::string &raw_cmd, const std::wstring &working_dir, HANDLE token, DWORD &creation_flags) {
-    std::wstring raw_cmd_w = from_utf8(raw_cmd);
+    std::wstring raw_cmd_w = utf_utils::from_utf8(raw_cmd);
 
     // First, convert the given command into parts so we can get the executable/file/URL without parameters
     auto raw_cmd_parts = boost::program_options::split_winmain(raw_cmd_w);
     if (raw_cmd_parts.empty()) {
       // This is highly unexpected, but we'll just return the raw string and hope for the best.
       BOOST_LOG(warning) << "Failed to split command string: "sv << raw_cmd;
-      return from_utf8(raw_cmd);
+      return utf_utils::from_utf8(raw_cmd);
     }
 
     auto raw_target = raw_cmd_parts.at(0);
-    if (PathIsURLW(raw_target.c_str())) {
-      // If the target is a URL, handle it directly with rundll32.exe
-      std::wstring cmd = L"rundll32.exe url.dll,FileProtocolHandler " + raw_target;
-      return cmd;
-    }
-
-    // If the target is not a URL, assume it's a regular file path
-    auto extension = PathFindExtensionW(raw_target.c_str());
-    if (extension == nullptr || *extension == 0) {
-      // If the file has no extension, assume it's a command and allow CreateProcess()
-      // to try to find it via PATH
-      return from_utf8(raw_cmd);
-    }
-    else if (boost::iequals(extension, L".exe")) {
-      // If the file has an .exe extension, we will bypass the resolution here and
-      // directly pass the unmodified command string to CreateProcess(). The argument
-      // escaping rules are subtly different between CreateProcess() and ShellExecute(),
-      // and we want to preserve backwards compatibility with older configs.
-      return from_utf8(raw_cmd);
-    }
-
-    // For regular files, the class is found using the file extension (including the dot)
-    std::wstring lookup_string = extension;
+    std::wstring lookup_string;
     HRESULT res;
+
+    if (PathIsURLW(raw_target.c_str())) {
+      std::array<WCHAR, 128> scheme;
+
+      DWORD out_len = scheme.size();
+      res = UrlGetPartW(raw_target.c_str(), scheme.data(), &out_len, URL_PART_SCHEME, 0);
+      if (res != S_OK) {
+        BOOST_LOG(warning) << "Failed to extract URL scheme from URL: "sv << raw_target << " ["sv << util::hex(res).to_string_view() << ']';
+        return from_utf8(raw_cmd);
+      }
+
+      // If the target is a URL, the class is found using the URL scheme (prior to and not including the ':')
+      lookup_string = scheme.data();
+    } else {
+      // If the target is not a URL, assume it's a regular file path
+      auto extension = PathFindExtensionW(raw_target.c_str());
+      if (extension == nullptr || *extension == 0) {
+        // If the file has no extension, assume it's a command and allow CreateProcess()
+        // to try to find it via PATH
+        return from_utf8(raw_cmd);
+      } else if (boost::iequals(extension, L".exe")) {
+        // If the file has an .exe extension, we will bypass the resolution here and
+        // directly pass the unmodified command string to CreateProcess(). The argument
+        // escaping rules are subtly different between CreateProcess() and ShellExecute(),
+        // and we want to preserve backwards compatibility with older configs.
+        return from_utf8(raw_cmd);
+      }
+
+      // For regular files, the class is found using the file extension (including the dot)
+      lookup_string = extension;
+    }
 
     std::array<WCHAR, MAX_PATH> shell_command_string;
     bool needs_cmd_escaping = false;
@@ -784,11 +903,11 @@ namespace platf {
       // Overriding these predefined keys affects process-wide state, so serialize all calls
       // to ensure the handle state is consistent while we perform the command query.
       static std::mutex per_user_key_mutex;
-      auto lg = std::lock_guard(per_user_key_mutex);
+      auto lg = std::scoped_lock(per_user_key_mutex);
 
       // Override HKEY_CLASSES_ROOT and HKEY_CURRENT_USER to ensure we query the correct class info
       if (!override_per_user_predefined_keys(token)) {
-        return from_utf8(raw_cmd);
+        return utf_utils::from_utf8(raw_cmd);
       }
 
       // Find the command string for the specified class
@@ -819,7 +938,7 @@ namespace platf {
 
     if (res != S_OK) {
       BOOST_LOG(warning) << "Failed to query command string for raw command: "sv << raw_cmd << " ["sv << util::hex(res).to_string_view() << ']';
-      return from_utf8(raw_cmd);
+      return utf_utils::from_utf8(raw_cmd);
     }
 
     // Finally, construct the real command string that will be passed into CreateProcess().
@@ -953,7 +1072,7 @@ namespace platf {
    * @return A `bp::child` object representing the new process, or an empty `bp::child` object if the launch fails.
    */
   bp::child run_command(bool elevated, bool interactive, const std::string &cmd, boost::filesystem::path &working_dir, const bp::environment &env, FILE *file, std::error_code &ec, bp::group *group) {
-    std::wstring start_dir = from_utf8(working_dir.string());
+    std::wstring start_dir = utf_utils::from_utf8(working_dir.string());
     HANDLE job = group ? group->native_handle() : nullptr;
     STARTUPINFOEXW startup_info = create_startup_info(file, job ? &job : nullptr, ec);
     PROCESS_INFORMATION process_info;
@@ -982,7 +1101,7 @@ namespace platf {
     auto sunshine_wenv = boost::this_process::wenvironment();
     std::wstring path_var_name {L"PATH"};
     std::wstring old_path_val;
-    auto itr = std::find_if(sunshine_wenv.cbegin(), sunshine_wenv.cend(), [&](const auto &e) {
+    auto itr = boost::range::find_if(std::as_const(sunshine_wenv), [&path_var_name](const auto &e) {
       return boost::iequals(e.get_name(), path_var_name);
     });
     if (itr != sunshine_wenv.cend()) {
@@ -996,7 +1115,7 @@ namespace platf {
     sunshine_wenv[path_var_name].assign(start_dir + L";" + old_path_val);
 
     // Restore the old PATH value for our process when we're done here
-    auto restore_path = util::fail_guard([&]() {
+    auto restore_path = util::fail_guard([&old_path_val, &sunshine_wenv, &path_var_name]() {
       if (old_path_val.empty()) {
         sunshine_wenv[path_var_name].clear();
       } else {
@@ -1060,48 +1179,73 @@ namespace platf {
     return create_boost_child_from_results(ret, cmd, ec, process_info);
   }
 
+  std::wstring make_url_launch_command(const std::wstring &command_processor, const std::wstring &url) {
+    return std::format(LR"({} /d /v:off /c start "" {})", escape_argument(command_processor), escape_argument_for_cmd(escape_argument(url)));
+  }
+
   /**
-   * @brief Open a url in the default web browser.
-   * @param url The url to open.
+   * @brief Open a URL through the Windows shell in the user's session.
+   * @details The command processor's start command preserves shell activation for packaged browsers.
    */
   void open_url(const std::string &url) {
+    std::array<wchar_t, MAX_PATH> system_directory;
+    const auto length = GetSystemDirectoryW(system_directory.data(), system_directory.size());
+    if (!length || length >= system_directory.size()) {
+      BOOST_LOG(warning) << "Couldn't locate Windows command processor to open url ["sv << url << ']';
+      return;
+    }
+    // Use the system command processor and disable AutoRun and delayed environment expansion.
+    // start performs shell activation in the user's process context, including MSIX activation.
+    const auto command = utf_utils::to_utf8(make_url_launch_command(std::wstring {system_directory.data(), length} + L"\\cmd.exe", utf_utils::from_utf8(url)));
     boost::process::v1::environment _env = boost::this_process::environment();
     auto working_dir = boost::filesystem::path();
     std::error_code ec;
 
-    auto child = run_command(false, false, url, working_dir, _env, nullptr, ec, nullptr);
+    auto child = run_command(false, false, command, working_dir, _env, nullptr, ec, nullptr);
     if (ec) {
       BOOST_LOG(warning) << "Couldn't open url ["sv << url << "]: System: "sv << ec.message();
     } else {
-      BOOST_LOG(info) << "Opened url ["sv << url << "]"sv;
+      BOOST_LOG(info) << "Opening url ["sv << url << "]"sv;
       child.detach();
     }
   }
 
+  /**
+   * @brief Set the calling thread's Windows scheduling priority.
+   */
   void adjust_thread_priority(thread_priority_e priority) {
     int win32_priority;
 
     switch (priority) {
-      case thread_priority_e::low:
+      using enum thread_priority_e;
+      case low:
         win32_priority = THREAD_PRIORITY_BELOW_NORMAL;
         break;
-      case thread_priority_e::normal:
+      case normal:
         win32_priority = THREAD_PRIORITY_NORMAL;
         break;
-      case thread_priority_e::high:
+      case high:
         win32_priority = THREAD_PRIORITY_ABOVE_NORMAL;
         break;
-      case thread_priority_e::critical:
+      case critical:
         win32_priority = THREAD_PRIORITY_HIGHEST;
         break;
       default:
-        BOOST_LOG(error) << "Unknown thread priority: "sv << (int) priority;
+        BOOST_LOG(error) << "Unknown thread priority: "sv << std::to_underlying(priority);
         return;
     }
 
     if (!SetThreadPriority(GetCurrentThread(), win32_priority)) {
       auto winerr = GetLastError();
       BOOST_LOG(warning) << "Unable to set thread priority to "sv << win32_priority << ": "sv << winerr;
+    }
+  }
+
+  void set_thread_name(std::string_view name) {
+    std::wstring wname = utf_utils::from_utf8(std::string {name});
+    HRESULT hr = SetThreadDescription(GetCurrentThread(), wname.c_str());
+    if (FAILED(hr)) {
+      BOOST_LOG(error) << "SetThreadDescription failed: " << hr;
     }
   }
 
@@ -1176,8 +1320,8 @@ namespace platf {
               // https://docs.microsoft.com/en-us/windows-hardware/drivers/network/oid-wdi-set-connection-quality
               // https://docs.microsoft.com/en-us/previous-versions/windows/hardware/wireless/native-802-11-media-streaming
               BOOL value = TRUE;
-              auto error = fn_WlanSetInterface(wlan_handle, &wlan_interface_list->InterfaceInfo[i].InterfaceGuid, wlan_intf_opcode_media_streaming_mode, sizeof(value), &value, nullptr);
-              if (error == ERROR_SUCCESS) {
+              auto wlan_status = fn_WlanSetInterface(wlan_handle, &wlan_interface_list->InterfaceInfo[i].InterfaceGuid, wlan_intf_opcode_media_streaming_mode, sizeof(value), &value, nullptr);
+              if (wlan_status == ERROR_SUCCESS) {
                 BOOST_LOG(info) << "WLAN interface "sv << i << " is now in low latency mode"sv;
               }
             }
@@ -1190,7 +1334,10 @@ namespace platf {
         }
       }
     }
+    enable_mouse_keys();
+  }
 
+  void enable_mouse_keys() {
     // If there is no mouse connected, enable Mouse Keys to force the cursor to appear
     if (!GetSystemMetrics(SM_MOUSEPRESENT)) {
       BOOST_LOG(info) << "A mouse was not detected. Sunshine will enable Mouse Keys while streaming to force the mouse cursor to appear.";
@@ -1256,15 +1403,15 @@ namespace platf {
     STARTUPINFOEXW startup_info {};
     startup_info.StartupInfo.cb = sizeof(startup_info);
 
-    WCHAR executable[MAX_PATH];
-    if (GetModuleFileNameW(nullptr, executable, ARRAYSIZE(executable)) == 0) {
+    std::array<WCHAR, MAX_PATH> executable;
+    if (GetModuleFileNameW(nullptr, executable.data(), executable.size()) == 0) {
       auto winerr = GetLastError();
       BOOST_LOG(fatal) << "Failed to get Sunshine path: "sv << winerr;
       return;
     }
 
     PROCESS_INFORMATION process_info;
-    if (!CreateProcessW(executable, GetCommandLineW(), nullptr, nullptr, false, CREATE_UNICODE_ENVIRONMENT | EXTENDED_STARTUPINFO_PRESENT, nullptr, nullptr, (LPSTARTUPINFOW) &startup_info, &process_info)) {
+    if (!CreateProcessW(executable.data(), GetCommandLineW(), nullptr, nullptr, false, CREATE_UNICODE_ENVIRONMENT | EXTENDED_STARTUPINFO_PRESENT, nullptr, nullptr, (LPSTARTUPINFOW) &startup_info, &process_info)) {
       auto winerr = GetLastError();
       BOOST_LOG(fatal) << "Unable to restart Sunshine: "sv << winerr;
       return;
@@ -1286,17 +1433,12 @@ namespace platf {
     lifetime::exit_sunshine(0, true);
   }
 
-  int set_env(const std::string &name, const std::string &value) {
-    return _putenv_s(name.c_str(), value.c_str());
-  }
-
-  int unset_env(const std::string &name) {
-    return _putenv_s(name.c_str(), "");
-  }
-
+  /**
+   * @brief Stores state while enumerating top-level Windows windows.
+   */
   struct enum_wnd_context_t {
-    std::set<DWORD> process_ids;
-    bool requested_exit;
+    std::set<DWORD> process_ids;  ///< Process ids.
+    bool requested_exit;  ///< Whether a close request was observed while enumerating windows.
   };
 
   static BOOL CALLBACK prgrp_enum_windows(HWND hwnd, LPARAM lParam) {
@@ -1316,8 +1458,8 @@ namespace platf {
         BOOST_LOG(debug) << "Sent WM_CLOSE to PID: "sv << wnd_process_id;
         enum_ctx->requested_exit = true;
       } else {
-        auto error = GetLastError();
-        BOOST_LOG(warning) << "Failed to send WM_CLOSE to PID ["sv << wnd_process_id << "]: " << error;
+        auto close_error = GetLastError();
+        BOOST_LOG(warning) << "Failed to send WM_CLOSE to PID ["sv << wnd_process_id << "]: " << close_error;
       }
     }
 
@@ -1403,9 +1545,50 @@ namespace platf {
     return saddr_v6;
   }
 
+  /**
+   * @brief Write the source IP address into the first ancillary control message.
+   *
+   * @param msg Socket message with control storage sized for packet information.
+   * @param source_address Local IP address to use for outgoing packets.
+   * @return Bytes occupied by the packet-information control message.
+   */
+  static ULONG populate_source_pktinfo(WSAMSG &msg, const boost::asio::ip::address &source_address) {
+    ULONG cmbuflen = 0;
+    auto cm = WSA_CMSG_FIRSTHDR(&msg);
+    if (source_address.is_v6()) {
+      IN6_PKTINFO pktInfo;
+
+      SOCKADDR_IN6 saddr_v6 = to_sockaddr(source_address.to_v6(), 0);
+      pktInfo.ipi6_addr = saddr_v6.sin6_addr;
+      pktInfo.ipi6_ifindex = 0;
+
+      cmbuflen += WSA_CMSG_SPACE(sizeof(pktInfo));
+
+      cm->cmsg_level = IPPROTO_IPV6;
+      cm->cmsg_type = IPV6_PKTINFO;
+      cm->cmsg_len = WSA_CMSG_LEN(sizeof(pktInfo));
+      memcpy(WSA_CMSG_DATA(cm), &pktInfo, sizeof(pktInfo));
+    } else {
+      IN_PKTINFO pktInfo;
+
+      SOCKADDR_IN saddr_v4 = to_sockaddr(source_address.to_v4(), 0);
+      pktInfo.ipi_addr = saddr_v4.sin_addr;
+      pktInfo.ipi_ifindex = 0;
+
+      cmbuflen += WSA_CMSG_SPACE(sizeof(pktInfo));
+
+      cm->cmsg_level = IPPROTO_IP;
+      cm->cmsg_type = IP_PKTINFO;
+      cm->cmsg_len = WSA_CMSG_LEN(sizeof(pktInfo));
+      memcpy(WSA_CMSG_DATA(cm), &pktInfo, sizeof(pktInfo));
+    }
+
+    return cmbuflen;
+  }
+
   // Use UDP segmentation offload if it is supported by the OS. If the NIC is capable, this will use
   // hardware acceleration to reduce CPU usage. Support for USO was introduced in Windows 10 20H1.
-  bool send_batch(batched_send_info_t &send_info) {
+  bool send_batch(const batched_send_info_t &send_info) {
     WSAMSG msg;
 
     // Convert the target address into a SOCKADDR
@@ -1425,7 +1608,7 @@ namespace platf {
 
     auto const max_bufs_per_msg = send_info.payload_buffers.size() + (send_info.headers ? 1 : 0);
 
-    WSABUF bufs[(send_info.headers ? send_info.block_count : 1) * max_bufs_per_msg];
+    std::vector<WSABUF> bufs((send_info.headers ? send_info.block_count : 1) * max_bufs_per_msg);
     DWORD bufcount = 0;
     if (send_info.headers) {
       // Interleave buffers for headers and payloads
@@ -1451,50 +1634,21 @@ namespace platf {
       }
     }
 
-    msg.lpBuffers = bufs;
+    msg.lpBuffers = bufs.data();
     msg.dwBufferCount = bufcount;
     msg.dwFlags = 0;
 
     // At most, one DWORD option and one PKTINFO option
-    char cmbuf[WSA_CMSG_SPACE(sizeof(DWORD)) + std::max(WSA_CMSG_SPACE(sizeof(IN6_PKTINFO)), WSA_CMSG_SPACE(sizeof(IN_PKTINFO)))] = {};
-    ULONG cmbuflen = 0;
+    std::array<char, WSA_CMSG_SPACE(sizeof(DWORD)) + std::max(WSA_CMSG_SPACE(sizeof(IN6_PKTINFO)), WSA_CMSG_SPACE(sizeof(IN_PKTINFO)))> cmbuf = {};
+    msg.Control.buf = cmbuf.data();
+    msg.Control.len = cmbuf.size();
 
-    msg.Control.buf = cmbuf;
-    msg.Control.len = sizeof(cmbuf);
-
-    auto cm = WSA_CMSG_FIRSTHDR(&msg);
-    if (send_info.source_address.is_v6()) {
-      IN6_PKTINFO pktInfo;
-
-      SOCKADDR_IN6 saddr_v6 = to_sockaddr(send_info.source_address.to_v6(), 0);
-      pktInfo.ipi6_addr = saddr_v6.sin6_addr;
-      pktInfo.ipi6_ifindex = 0;
-
-      cmbuflen += WSA_CMSG_SPACE(sizeof(pktInfo));
-
-      cm->cmsg_level = IPPROTO_IPV6;
-      cm->cmsg_type = IPV6_PKTINFO;
-      cm->cmsg_len = WSA_CMSG_LEN(sizeof(pktInfo));
-      memcpy(WSA_CMSG_DATA(cm), &pktInfo, sizeof(pktInfo));
-    } else {
-      IN_PKTINFO pktInfo;
-
-      SOCKADDR_IN saddr_v4 = to_sockaddr(send_info.source_address.to_v4(), 0);
-      pktInfo.ipi_addr = saddr_v4.sin_addr;
-      pktInfo.ipi_ifindex = 0;
-
-      cmbuflen += WSA_CMSG_SPACE(sizeof(pktInfo));
-
-      cm->cmsg_level = IPPROTO_IP;
-      cm->cmsg_type = IP_PKTINFO;
-      cm->cmsg_len = WSA_CMSG_LEN(sizeof(pktInfo));
-      memcpy(WSA_CMSG_DATA(cm), &pktInfo, sizeof(pktInfo));
-    }
+    auto cmbuflen = populate_source_pktinfo(msg, send_info.source_address);
 
     if (send_info.block_count > 1) {
       cmbuflen += WSA_CMSG_SPACE(sizeof(DWORD));
 
-      cm = WSA_CMSG_NXTHDR(&msg, cm);
+      auto cm = WSA_CMSG_NXTHDR(&msg, WSA_CMSG_FIRSTHDR(&msg));
       cm->cmsg_level = IPPROTO_UDP;
       cm->cmsg_type = UDP_SEND_MSG_SIZE;
       cm->cmsg_len = WSA_CMSG_LEN(sizeof(DWORD));
@@ -1526,7 +1680,7 @@ namespace platf {
       msg.namelen = sizeof(taddr_v4);
     }
 
-    WSABUF bufs[2];
+    std::array<WSABUF, 2> bufs;
     DWORD bufcount = 0;
     if (send_info.header) {
       bufs[bufcount].buf = (char *) send_info.header;
@@ -1537,44 +1691,15 @@ namespace platf {
     bufs[bufcount].len = send_info.payload_size;
     bufcount++;
 
-    msg.lpBuffers = bufs;
+    msg.lpBuffers = bufs.data();
     msg.dwBufferCount = bufcount;
     msg.dwFlags = 0;
 
-    char cmbuf[std::max(WSA_CMSG_SPACE(sizeof(IN6_PKTINFO)), WSA_CMSG_SPACE(sizeof(IN_PKTINFO)))] = {};
-    ULONG cmbuflen = 0;
+    std::array<char, std::max(WSA_CMSG_SPACE(sizeof(IN6_PKTINFO)), WSA_CMSG_SPACE(sizeof(IN_PKTINFO)))> cmbuf = {};
+    msg.Control.buf = cmbuf.data();
+    msg.Control.len = cmbuf.size();
 
-    msg.Control.buf = cmbuf;
-    msg.Control.len = sizeof(cmbuf);
-
-    auto cm = WSA_CMSG_FIRSTHDR(&msg);
-    if (send_info.source_address.is_v6()) {
-      IN6_PKTINFO pktInfo;
-
-      SOCKADDR_IN6 saddr_v6 = to_sockaddr(send_info.source_address.to_v6(), 0);
-      pktInfo.ipi6_addr = saddr_v6.sin6_addr;
-      pktInfo.ipi6_ifindex = 0;
-
-      cmbuflen += WSA_CMSG_SPACE(sizeof(pktInfo));
-
-      cm->cmsg_level = IPPROTO_IPV6;
-      cm->cmsg_type = IPV6_PKTINFO;
-      cm->cmsg_len = WSA_CMSG_LEN(sizeof(pktInfo));
-      memcpy(WSA_CMSG_DATA(cm), &pktInfo, sizeof(pktInfo));
-    } else {
-      IN_PKTINFO pktInfo;
-
-      SOCKADDR_IN saddr_v4 = to_sockaddr(send_info.source_address.to_v4(), 0);
-      pktInfo.ipi_addr = saddr_v4.sin_addr;
-      pktInfo.ipi_ifindex = 0;
-
-      cmbuflen += WSA_CMSG_SPACE(sizeof(pktInfo));
-
-      cm->cmsg_level = IPPROTO_IP;
-      cm->cmsg_type = IP_PKTINFO;
-      cm->cmsg_len = WSA_CMSG_LEN(sizeof(pktInfo));
-      memcpy(WSA_CMSG_DATA(cm), &pktInfo, sizeof(pktInfo));
-    }
+    auto cmbuflen = populate_source_pktinfo(msg, send_info.source_address);
 
     msg.Control.len = cmbuflen;
 
@@ -1588,9 +1713,17 @@ namespace platf {
     return true;
   }
 
+  /**
+   * @brief Owns platform QoS state that is restored during cleanup.
+   */
   class qos_t: public deinit_t {
   public:
-    qos_t(QOS_FLOWID flow_id):
+    /**
+     * @brief Explicitly store a Windows QoS flow ID for cleanup on destruction.
+     *
+     * @param flow_id Flow ID.
+     */
+    explicit qos_t(QOS_FLOWID flow_id):
         flow_id(flow_id) {
     }
 
@@ -1607,11 +1740,6 @@ namespace platf {
 
   /**
    * @brief Enables QoS on the given socket for traffic to the specified destination.
-   * @param native_socket The native socket handle.
-   * @param address The destination address for traffic sent on this socket.
-   * @param port The destination port for traffic sent on this socket.
-   * @param data_type The type of traffic sent on this socket.
-   * @param dscp_tagging Specifies whether to enable DSCP tagging on outgoing traffic.
    */
   std::unique_ptr<deinit_t> enable_socket_qos(uintptr_t native_socket, boost::asio::ip::address &address, uint16_t port, qos_data_type_e data_type, bool dscp_tagging) {
     SOCKADDR_IN saddr_v4;
@@ -1708,7 +1836,7 @@ namespace platf {
         traffic_type = QOSTrafficTypeAudioVideo;
         break;
       default:
-        BOOST_LOG(error) << "Unknown traffic type: "sv << (int) data_type;
+        BOOST_LOG(error) << "Unknown traffic type: "sv << std::to_underlying(data_type);
         return nullptr;
     }
 
@@ -1722,14 +1850,19 @@ namespace platf {
     return std::make_unique<qos_t>(flow_id);
   }
 
+  /**
+   * @brief Read the current Windows high-resolution performance counter.
+   */
   int64_t qpc_counter() {
-    LARGE_INTEGER performance_counter;
-    if (QueryPerformanceCounter(&performance_counter)) {
+    if (LARGE_INTEGER performance_counter; QueryPerformanceCounter(&performance_counter)) {
       return performance_counter.QuadPart;
     }
     return 0;
   }
 
+  /**
+   * @brief Convert the difference between two QPC readings to nanoseconds.
+   */
   std::chrono::nanoseconds qpc_time_difference(int64_t performance_counter1, int64_t performance_counter2) {
     auto get_frequency = []() {
       LARGE_INTEGER frequency;
@@ -1737,8 +1870,7 @@ namespace platf {
       QueryPerformanceFrequency(&frequency);
       return frequency.QuadPart;
     };
-    static const double frequency = get_frequency();
-    if (frequency) {
+    if (static const double frequency = get_frequency(); frequency) {
       return std::chrono::nanoseconds((int64_t) ((performance_counter1 - performance_counter2) * frequency / std::nano::den));
     }
     return {};
@@ -1797,14 +1929,17 @@ namespace platf {
   }
 
   std::string get_host_name() {
-    WCHAR hostname[256];
-    if (GetHostNameW(hostname, ARRAYSIZE(hostname)) == SOCKET_ERROR) {
+    std::array<WCHAR, 256> hostname;
+    if (GetHostNameW(hostname.data(), hostname.size()) == SOCKET_ERROR) {
       BOOST_LOG(error) << "GetHostNameW() failed: "sv << WSAGetLastError();
       return "Sunshine"s;
     }
-    return to_utf8(hostname);
+    return utf_utils::to_utf8(hostname.data());
   }
 
+  /**
+   * @brief Implements the high-precision timer using Win32 waitable timers.
+   */
   class win32_high_precision_timer: public high_precision_timer {
   public:
     win32_high_precision_timer() {
@@ -1844,7 +1979,12 @@ namespace platf {
       WaitForSingleObject(timer, INFINITE);
     }
 
-    operator bool() override {
+    /**
+     * @brief Explicitly check whether the timer backend is initialized.
+     *
+     * @return True when the platform timer is available.
+     */
+    explicit operator bool() override {
       return timer != nullptr;
     }
 
@@ -1866,6 +2006,37 @@ namespace platf {
   set_clipboard(const std::string& content) {
     std::wstring cpContent = from_utf8(ensureCrLf(content));
     return !setClipboardData(cpContent);
+  }
+
+  bool getFileVersionInfo(const std::filesystem::path &file_path, std::string &version_str) {
+    DWORD handle = 0;
+    DWORD size = GetFileVersionInfoSizeW(file_path.wstring().c_str(), &handle);
+    if (size == 0) {
+      return false;
+    }
+
+    std::vector<BYTE> buffer(size);
+    if (!GetFileVersionInfoW(file_path.wstring().c_str(), handle, size, buffer.data())) {
+      return false;
+    }
+
+    VS_FIXEDFILEINFO *file_info = nullptr;
+    if (UINT file_info_size = 0; !VerQueryValueW(buffer.data(), L"\\", (LPVOID *) &file_info, &file_info_size)) {
+      return false;
+    }
+
+    DWORD major = HIWORD(file_info->dwFileVersionMS);
+    DWORD minor = LOWORD(file_info->dwFileVersionMS);
+    DWORD build = HIWORD(file_info->dwFileVersionLS);
+    DWORD revision = LOWORD(file_info->dwFileVersionLS);
+
+    version_str = std::format("{}.{}.{}.{}", major, minor, build, revision);
+
+    return true;
+  }
+
+  std::string resolve_render_device() {
+    return {};
   }
 }  // namespace platf
 

@@ -8,9 +8,12 @@
 // local includes
 #include "nvenc_utils.h"
 
-namespace nvenc {
+namespace NVENC_NAMESPACE {
 
 #ifdef _WIN32
+  /**
+   * @brief Convert an NVENC buffer format to the matching DXGI format.
+   */
   DXGI_FORMAT dxgi_format_from_nvenc_format(NV_ENC_BUFFER_FORMAT format) {
     switch (format) {
       case NV_ENC_BUFFER_FORMAT_YUV420_10BIT:
@@ -31,18 +34,25 @@ namespace nvenc {
   }
 #endif
 
+  /**
+   * @brief Convert a Sunshine pixel format to the matching NVENC buffer format.
+   */
   NV_ENC_BUFFER_FORMAT nvenc_format_from_sunshine_format(platf::pix_fmt_e format) {
     switch (format) {
-      case platf::pix_fmt_e::nv12:
+      using enum platf::pix_fmt_e;
+      case nv12:
         return NV_ENC_BUFFER_FORMAT_NV12;
 
-      case platf::pix_fmt_e::p010:
+      case p010:
         return NV_ENC_BUFFER_FORMAT_YUV420_10BIT;
 
-      case platf::pix_fmt_e::ayuv:
+      case ayuv:
         return NV_ENC_BUFFER_FORMAT_AYUV;
 
-      case platf::pix_fmt_e::yuv444p16:
+      case yuv444p:
+        return NV_ENC_BUFFER_FORMAT_YUV444;
+
+      case yuv444p16:
         return NV_ENC_BUFFER_FORMAT_YUV444_10BIT;
 
       default:
@@ -50,6 +60,9 @@ namespace nvenc {
     }
   }
 
+  /**
+   * @brief Convert Sunshine colorspace metadata to NVENC VUI metadata.
+   */
   nvenc_colorspace_t nvenc_colorspace_from_sunshine_colorspace(const video::sunshine_colorspace_t &sunshine_colorspace) {
     nvenc_colorspace_t colorspace;
 
@@ -90,4 +103,4 @@ namespace nvenc {
     return colorspace;
   }
 
-}  // namespace nvenc
+}  // namespace NVENC_NAMESPACE

@@ -16,31 +16,74 @@ if(${SUNSHINE_BUILD_APPIMAGE} OR ${SUNSHINE_BUILD_FLATPAK})
             DESTINATION "${SUNSHINE_ASSETS_DIR}/udev/rules.d")
     install(FILES "${SUNSHINE_SOURCE_ASSETS_DIR}/linux/misc/60-sunshine.conf"
             DESTINATION "${SUNSHINE_ASSETS_DIR}/modules-load.d")
-    install(FILES "${CMAKE_CURRENT_BINARY_DIR}/sunshine.service"
+    install(FILES "${CMAKE_CURRENT_BINARY_DIR}/app-${PROJECT_FQDN}.service"
             DESTINATION "${SUNSHINE_ASSETS_DIR}/systemd/user")
+elseif(${SUNSHINE_BUILD_HOMEBREW})
+    install(FILES "${SUNSHINE_SOURCE_ASSETS_DIR}/linux/misc/60-sunshine.rules"
+            DESTINATION "${CMAKE_INSTALL_LIBDIR}/udev/rules.d")
+    install(FILES "${SUNSHINE_SOURCE_ASSETS_DIR}/linux/misc/60-sunshine.conf"
+            DESTINATION "${CMAKE_INSTALL_LIBDIR}/modules-load.d")
+    install(FILES "${CMAKE_CURRENT_BINARY_DIR}/app-${PROJECT_FQDN}.service"
+            DESTINATION ".")
 else()
     find_package(Systemd)
     find_package(Udev)
 
     if(UDEV_FOUND)
-        install(FILES "${SUNSHINE_SOURCE_ASSETS_DIR}/linux/misc/60-sunshine.rules"
-                DESTINATION "${UDEV_RULES_INSTALL_DIR}")
+        set(SUNSHINE_UDEV_RULES_INSTALL_DIR "${UDEV_RULES_INSTALL_DIR}")
+    else()
+        set(SUNSHINE_UDEV_RULES_INSTALL_DIR "${CMAKE_INSTALL_LIBDIR}/udev/rules.d")
+        message(WARNING
+                "Could not determine the host udev rules directory; "
+                "installing Sunshine rules to ${SUNSHINE_UDEV_RULES_INSTALL_DIR}")
     endif()
+    install(FILES "${SUNSHINE_SOURCE_ASSETS_DIR}/linux/misc/60-sunshine.rules"
+            DESTINATION "${SUNSHINE_UDEV_RULES_INSTALL_DIR}")
     if(SYSTEMD_FOUND)
-        install(FILES "${CMAKE_CURRENT_BINARY_DIR}/sunshine.service"
+        install(FILES "${CMAKE_CURRENT_BINARY_DIR}/app-${PROJECT_FQDN}.service"
                 DESTINATION "${SYSTEMD_USER_UNIT_INSTALL_DIR}")
         install(FILES "${SUNSHINE_SOURCE_ASSETS_DIR}/linux/misc/60-sunshine.conf"
                 DESTINATION "${SYSTEMD_MODULES_LOAD_DIR}")
     endif()
 endif()
 
+# RPM specific
+set(CPACK_RPM_PACKAGE_LICENSE "GPLv3")
+
+# DEB specific
+set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
+if(DEFINED ENV{DEBIAN_PACKAGE_RELEASE})  # cmake-lint: disable=W0106
+    set(CPACK_DEBIAN_PACKAGE_RELEASE "$ENV{DEBIAN_PACKAGE_RELEASE}")
+endif()
+
+# FreeBSD specific
+set(CPACK_FREEBSD_PACKAGE_MAINTAINER "${CPACK_PACKAGE_VENDOR}")
+set(CPACK_FREEBSD_PACKAGE_ORIGIN "misc/${CPACK_PACKAGE_NAME}")
+set(CPACK_FREEBSD_PACKAGE_LICENSE "GPLv3")
+
 # Post install
 set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA "${SUNSHINE_SOURCE_ASSETS_DIR}/linux/misc/postinst")
 set(CPACK_RPM_POST_INSTALL_SCRIPT_FILE "${SUNSHINE_SOURCE_ASSETS_DIR}/linux/misc/postinst")
 
+# FreeBSD post install/deinstall scripts
+if(FREEBSD)
+    # Note: CPack's FreeBSD generator does NOT natively support install/deinstall scripts
+    # like CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA or CPACK_RPM_POST_INSTALL_SCRIPT_FILE.
+    # This is a known limitation of the CPack FREEBSD generator.
+    #
+    # Workaround: Use CPACK_POST_BUILD_SCRIPTS to extract the generated .pkg file,
+    # add the install/deinstall scripts, and repack the package. This ensures they are
+    # recognized as package control scripts rather than installed files.
+    set(CPACK_FREEBSD_PACKAGE_SCRIPTS
+        "${SUNSHINE_SOURCE_ASSETS_DIR}/bsd/misc/+POST_INSTALL"
+        "${SUNSHINE_SOURCE_ASSETS_DIR}/bsd/misc/+PRE_DEINSTALL"
+    )
+    list(APPEND CPACK_POST_BUILD_SCRIPTS "${CMAKE_MODULE_PATH}/packaging/freebsd_custom_cpack.cmake")
+endif()
+
 # Apply setcap for RPM
 # https://github.com/coreos/rpm-ostree/discussions/5036#discussioncomment-10291071
-set(CPACK_RPM_USER_FILELIST "%caps(cap_sys_admin+p) ${SUNSHINE_EXECUTABLE_PATH}")
+set(CPACK_RPM_USER_FILELIST "%caps(cap_sys_admin,cap_sys_nice+p) ${SUNSHINE_EXECUTABLE_PATH}")
 
 # Dependencies
 set(CPACK_DEB_COMPONENT_INSTALL ON)
@@ -77,6 +120,16 @@ set(CPACK_RPM_PACKAGE_REQUIRES "\
             openssl >= 3.0.2, \
             pulseaudio-libs >= 10.0, \
             which >= 2.21")
+list(APPEND CPACK_FREEBSD_PACKAGE_DEPS
+        audio/opus
+        ftp/curl
+        devel/libevdev
+        multimedia/pipewire
+        net/avahi
+        net/miniupnpc
+        security/openssl
+        x11/libX11
+)
 
 if(NOT BOOST_USE_STATIC)
     set(CPACK_DEBIAN_PACKAGE_DEPENDS "\
@@ -91,10 +144,14 @@ if(NOT BOOST_USE_STATIC)
                 boost-locale >= ${Boost_VERSION}, \
                 boost-log >= ${Boost_VERSION}, \
                 boost-program-options >= ${Boost_VERSION}")
+    list(APPEND CPACK_FREEBSD_PACKAGE_DEPS
+            devel/boost-libs
+    )
 endif()
 
-# This should automatically figure out dependencies, doesn't work with the current config
-set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS OFF)
+# This should automatically figure out dependencies on packages
+set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
+set(CPACK_RPM_PACKAGE_AUTOREQ ON)
 
 # application icon
 if(NOT ${SUNSHINE_BUILD_FLATPAK})
@@ -106,7 +163,7 @@ else()
             RENAME "${PROJECT_FQDN}.svg")
 endif()
 
-# tray icon
+# tray icon (Apollo branding)
 if(${SUNSHINE_TRAY} STREQUAL 1)
     if(NOT ${SUNSHINE_BUILD_FLATPAK})
         install(FILES "${CMAKE_SOURCE_DIR}/apollo.svg"
@@ -134,13 +191,41 @@ if(${SUNSHINE_TRAY} STREQUAL 1)
                 RENAME "${PROJECT_FQDN}-locked.svg")
     endif()
 
-    set(CPACK_DEBIAN_PACKAGE_DEPENDS "\
+    if(SUNSHINE_TRAY_QT_VERSION EQUAL 6)
+        # Qt loads platform plugins at runtime, so shlibdeps cannot detect this dependency.
+        set(CPACK_DEBIAN_PACKAGE_DEPENDS "\
                     ${CPACK_DEBIAN_PACKAGE_DEPENDS}, \
-                    libayatana-appindicator3-1, \
-                    libnotify4")
-    set(CPACK_RPM_PACKAGE_REQUIRES "\
+                    libqt6widgets6, \
+                    libqt6svg6, \
+                    qt6-qpa-plugins"
+        )
+        set(CPACK_RPM_PACKAGE_REQUIRES "\
                     ${CPACK_RPM_PACKAGE_REQUIRES}, \
-                    libappindicator-gtk3 >= 12.10.0")
+                    qt6-qtbase, \
+                    qt6-qtsvg"
+        )
+        list(APPEND CPACK_FREEBSD_PACKAGE_DEPS
+                devel/qt6-base
+                graphics/qt6-svg
+        )
+    elseif(SUNSHINE_TRAY_QT_VERSION EQUAL 5)
+        set(CPACK_DEBIAN_PACKAGE_DEPENDS "\
+                    ${CPACK_DEBIAN_PACKAGE_DEPENDS}, \
+                    libqt5widgets5, \
+                    libqt5svg5"
+        )
+        set(CPACK_RPM_PACKAGE_REQUIRES "\
+                    ${CPACK_RPM_PACKAGE_REQUIRES}, \
+                    qt5-qtbase, \
+                    qt5-qtsvg"
+        )
+        list(APPEND CPACK_FREEBSD_PACKAGE_DEPS
+                x11-toolkits/qt5-widgets
+                graphics/qt5-svg
+        )
+    else()
+        message(FATAL_ERROR "Unsupported tray Qt version: ${SUNSHINE_TRAY_QT_VERSION}")
+    endif()
 endif()
 
 # desktop file
@@ -149,6 +234,10 @@ install(FILES "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_FQDN}.desktop"
 if(NOT ${SUNSHINE_BUILD_APPIMAGE} AND NOT ${SUNSHINE_BUILD_FLATPAK})
     install(FILES "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_FQDN}.terminal.desktop"
             DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/applications")
+    if(${SUNSHINE_ENABLE_KWIN})
+        install(FILES "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_FQDN}.kwin.desktop"
+                DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/applications")
+    endif()
 endif()
 
 # metadata file

@@ -70,8 +70,7 @@ namespace nvprefs {
       return false;
     }
 
-    NvAPI_Status status = NvAPI_DRS_LoadSettings(session_handle);
-    if (status != NVAPI_OK) {
+    if (NvAPI_Status status = NvAPI_DRS_LoadSettings(session_handle); status != NVAPI_OK) {
       nvapi_error_message(status);
       error_message("NvAPI_DRS_LoadSettings() failed");
       destroy();
@@ -86,8 +85,7 @@ namespace nvprefs {
       return false;
     }
 
-    NvAPI_Status status = NvAPI_DRS_SaveSettings(session_handle);
-    if (status != NVAPI_OK) {
+    if (NvAPI_Status status = NvAPI_DRS_SaveSettings(session_handle); status != NVAPI_OK) {
       nvapi_error_message(status);
       error_message("NvAPI_DRS_SaveSettings() failed");
       return false;
@@ -101,8 +99,7 @@ namespace nvprefs {
       return false;
     }
 
-    const auto &swapchain_data = undo_data.get_opengl_swapchain();
-    if (swapchain_data) {
+    if (const auto &swapchain_data = undo_data.get_opengl_swapchain(); swapchain_data) {
       NvAPI_Status status;
 
       NvDRSProfileHandle profile_handle = nullptr;
@@ -118,7 +115,7 @@ namespace nvprefs {
       status = NvAPI_DRS_GetSetting(session_handle, profile_handle, OGL_CPL_PREFER_DXPRESENT_ID, &setting);
 
       if (status == NVAPI_OK && setting.settingLocation == NVDRS_CURRENT_PROFILE_LOCATION && setting.u32CurrentValue == swapchain_data->our_value) {
-        if (swapchain_data->undo_value) {
+        if (swapchain_data->undo_value.has_value()) {
           setting = {};
           setting.version = NVDRS_SETTING_VER1;
           setting.settingId = OGL_CPL_PREFER_DXPRESENT_ID;
@@ -270,8 +267,7 @@ namespace nvprefs {
     status = NvAPI_DRS_GetSetting(session_handle, profile_handle, PREFERRED_PSTATE_ID, &setting);
 
     if (!get_nvprefs_options().sunshine_high_power_mode) {
-      if (status == NVAPI_OK &&
-          setting.settingLocation == NVDRS_CURRENT_PROFILE_LOCATION) {
+      if (status == NVAPI_OK && setting.settingLocation == NVDRS_CURRENT_PROFILE_LOCATION) {
         // User requested to not use high power mode for sunshine.exe,
         // remove the setting from application profile if it's been set previously
 
@@ -285,9 +281,7 @@ namespace nvprefs {
 
         info_message(std::wstring(L"Removed PREFERRED_PSTATE for ") + sunshine_application_path);
       }
-    } else if (status != NVAPI_OK ||
-               setting.settingLocation != NVDRS_CURRENT_PROFILE_LOCATION ||
-               setting.u32CurrentValue != PREFERRED_PSTATE_PREFER_MAX) {
+    } else if (status != NVAPI_OK || setting.settingLocation != NVDRS_CURRENT_PROFILE_LOCATION || setting.u32CurrentValue != PREFERRED_PSTATE_PREFER_MAX) {
       // Set power setting if needed
       setting = {};
       setting.version = NVDRS_SETTING_VER1;

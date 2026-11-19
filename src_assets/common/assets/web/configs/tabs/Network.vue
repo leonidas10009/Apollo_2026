@@ -1,16 +1,20 @@
 <script setup>
 import { computed, ref } from 'vue'
+import {
+  Info,
+  TriangleAlert,
+} from '@lucide/vue'
 import Checkbox from "../../Checkbox.vue";
 
-const props = defineProps([
-  'platform',
-  'config'
-])
+const props = defineProps({
+  platform: String,
+  config: Object,
+})
 
 const defaultMoonlightPort = 47989
 
 const config = ref(props.config)
-const effectivePort = computed(() => +config.value?.port ?? defaultMoonlightPort)
+const effectivePort = computed(() => Number(config.value?.port ?? defaultMoonlightPort))
 </script>
 
 <template>
@@ -33,6 +37,13 @@ const effectivePort = computed(() => +config.value?.port ?? defaultMoonlightPort
       <div class="form-text">{{ $t('config.address_family_desc') }}</div>
     </div>
 
+    <!-- Bind address -->
+    <div class="mb-3">
+      <label for="bind_address" class="form-label">{{ $t('config.bind_address') }}</label>
+      <input type="text" class="form-control" id="bind_address" v-model="config.bind_address" />
+      <div class="form-text">{{ $t('config.bind_address_desc') }}</div>
+    </div>
+
     <!-- Port family -->
     <div class="mb-3">
       <label for="port" class="form-label">{{ $t('config.port') }}</label>
@@ -41,11 +52,11 @@ const effectivePort = computed(() => +config.value?.port ?? defaultMoonlightPort
       <div class="form-text">{{ $t('config.port_desc') }}</div>
       <!-- Add warning if any port is less than 1024 -->
       <div class="alert alert-danger" v-if="(+effectivePort - 5) < 1024">
-        <i class="fa-solid fa-xl fa-triangle-exclamation"></i> {{ $t('config.port_alert_1') }}
+        <TriangleAlert :size="20" /> {{ $t('config.port_alert_1') }}
       </div>
       <!-- Add warning if any port is above 65535 -->
       <div class="alert alert-danger" v-if="(+effectivePort + 21) > 65535">
-        <i class="fa-solid fa-xl fa-triangle-exclamation"></i> {{ $t('config.port_alert_2') }}
+        <TriangleAlert :size="20" /> {{ $t('config.port_alert_2') }}
       </div>
       <!-- Create a port table for the various ports needed by Apollo -->
       <table class="table">
@@ -69,7 +80,7 @@ const effectivePort = computed(() => +config.value?.port ?? defaultMoonlightPort
           <td>{{+effectivePort}}</td>
           <td>
             <div class="alert alert-primary" role="alert" v-if="+effectivePort !== defaultMoonlightPort">
-              <i class="fa-solid fa-xl fa-circle-info"></i> {{ $t('config.port_http_port_note') }}
+              <Info :size="20" /> {{ $t('config.port_http_port_note') }}
             </div>
           </td>
         </tr>
@@ -91,17 +102,11 @@ const effectivePort = computed(() => +config.value?.port ?? defaultMoonlightPort
           <td>{{+effectivePort + 9}} - {{+effectivePort + 11}}</td>
           <td></td>
         </tr>
-        <!--            <tr>-->
-        <!--              &lt;!&ndash; Mic &ndash;&gt;-->
-        <!--              <td>UDP</td>-->
-        <!--              <td>{{+effectivePort + 13}}</td>-->
-        <!--              <td></td>-->
-        <!--            </tr>-->
         </tbody>
       </table>
       <!-- add warning about exposing web ui to the internet -->
       <div class="alert alert-warning" v-if="config.origin_web_ui_allowed === 'wan'">
-        <i class="fa-solid fa-xl fa-triangle-exclamation"></i> {{ $t('config.port_warning') }}
+        <TriangleAlert :size="20" /> {{ $t('config.port_warning') }}
       </div>
     </div>
 
@@ -114,6 +119,16 @@ const effectivePort = computed(() => +config.value?.port ?? defaultMoonlightPort
         <option value="wan">{{ $t('config.origin_web_ui_allowed_wan') }}</option>
       </select>
       <div class="form-text">{{ $t('config.origin_web_ui_allowed_desc') }}</div>
+    </div>
+
+    <!-- CSRF Allowed Origins -->
+    <div class="mb-3">
+      <label for="csrf_allowed_origins" class="form-label">{{ $t('config.csrf_allowed_origins') }}</label>
+      <input type="text"
+             class="form-control"
+             id="csrf_allowed_origins"
+             v-model="config.csrf_allowed_origins" />
+      <div class="form-text">{{ $t('config.csrf_allowed_origins_desc') }}</div>
     </div>
 
     <!-- External IP -->
@@ -152,9 +167,20 @@ const effectivePort = computed(() => +config.value?.port ?? defaultMoonlightPort
       <div class="form-text">{{ $t('config.ping_timeout_desc') }}</div>
     </div>
 
+    <!-- Packet Size Limit -->
+    <div class="mb-3">
+      <label for="packetsize" class="form-label">{{ $t('config.packetsize') }}</label>
+      <input type="number" min="0" max="65535" class="form-control" id="packetsize" placeholder="0" v-model="config.packetsize" />
+      <div class="form-text">{{ $t('config.packetsize_desc') }}</div>
+    </div>
+
+    <!-- DSCP Tagging -->
+    <Checkbox class="mb-3"
+              id="dscp_tagging"
+              locale-prefix="config"
+              v-model="config.dscp_tagging"
+              default="true"
+    ></Checkbox>
+
   </div>
 </template>
-
-<style scoped>
-
-</style>

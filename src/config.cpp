@@ -4,7 +4,11 @@
  */
 // standard includes
 #include <algorithm>
+#include <array>
+#include <charconv>
+#include <cstdint>
 #include <filesystem>
+#include <format>
 #include <fstream>
 #include <functional>
 #include <iostream>
@@ -31,86 +35,9 @@
 
 #ifdef _WIN32
   #include <shellapi.h>
-  #include "platform/windows/utils.h"
 #endif
 
-#if !defined(__ANDROID__) && !defined(__APPLE__)
-  // For NVENC legacy constants
-  #include <ffnvcodec/nvEncodeAPI.h>
-#endif
-
-namespace fs = std::filesystem;
-using namespace std::literals;
-
-#define CA_DIR "credentials"
-#define PRIVATE_KEY_FILE CA_DIR "/cakey.pem"
-#define CERTIFICATE_FILE CA_DIR "/cacert.pem"
-
-#define APPS_JSON_PATH platf::appdata().string() + "/apps.json"
-
-namespace config {
-
-  namespace nv {
-
-    nvenc::nvenc_two_pass twopass_from_view(const ::std::string_view &preset) {
-      if (preset == "disabled") {
-        return nvenc::nvenc_two_pass::disabled;
-      }
-      if (preset == "quarter_res") {
-        return nvenc::nvenc_two_pass::quarter_resolution;
-      }
-      if (preset == "full_res") {
-        return nvenc::nvenc_two_pass::full_resolution;
-      }
-      BOOST_LOG(warning) << "config: unknown nvenc_twopass value: " << preset;
-      return nvenc::nvenc_two_pass::quarter_resolution;
-    }
-
-  }  // namespace nv
-
-  namespace amd {
-#if !defined(_WIN32) || defined(DOXYGEN)
-  // values accurate as of 27/12/2022, but aren't strictly necessary for MacOS build
-  #define AMF_VIDEO_ENCODER_AV1_QUALITY_PRESET_SPEED 100
-  #define AMF_VIDEO_ENCODER_AV1_QUALITY_PRESET_QUALITY 30
-  #define AMF_VIDEO_ENCODER_AV1_QUALITY_PRESET_BALANCED 70
-  #define AMF_VIDEO_ENCODER_HEVC_QUALITY_PRESET_SPEED 10
-  #define AMF_VIDEO_ENCODER_HEVC_QUALITY_PRESET_QUALITY 0
-  #define AMF_VIDEO_ENCODER_HEVC_QUALITY_PRESET_BALANCED 5
-  #define AMF_VIDEO_ENCODER_QUALITY_PRESET_SPEED 1
-  #define AMF_VIDEO_ENCODER_QUALITY_PRESET_QUALITY 2
-  #define AMF_VIDEO_ENCODER_QUALITY_PRESET_BALANCED 0
-  #define AMF_VIDEO_ENCODER_AV1_RATE_CONTROL_METHOD_CONSTANT_QP 0
-  #define AMF_VIDEO_ENCODER_AV1_RATE_CONTROL_METHOD_CBR 3
-  #define AMF_VIDEO_ENCODER_AV1_RATE_CONTROL_METHOD_PEAK_CONSTRAINED_VBR 2
-  #define AMF_VIDEO_ENCODER_AV1_RATE_CONTROL_METHOD_LATENCY_CONSTRAINED_VBR 1
-  #define AMF_VIDEO_ENCODER_HEVC_RATE_CONTROL_METHOD_CONSTANT_QP 0
-  #define AMF_VIDEO_ENCODER_HEVC_RATE_CONTROL_METHOD_CBR 3
-  #define AMF_VIDEO_ENCODER_HEVC_RATE_CONTROL_METHOD_PEAK_CONSTRAINED_VBR 2
-  #define AMF_VIDEO_ENCODER_HEVC_RATE_CONTROL_METHOD_LATENCY_CONSTRAINED_VBR 1
-  #define AMF_VIDEO_ENCODER_RATE_CONTROL_METHOD_CONSTANT_QP 0
-  #define AMF_VIDEO_ENCODER_RATE_CONTROL_METHOD_CBR 1
-  #define AMF_VIDEO_ENCODER_RATE_CONTROL_METHOD_PEAK_CONSTRAINED_VBR 2
-  #define AMF_VIDEO_ENCODER_RATE_CONTROL_METHOD_LATENCY_CONSTRAINED_VBR 3
-  #define AMF_VIDEO_ENCODER_AV1_USAGE_TRANSCODING 0
-  #define AMF_VIDEO_ENCODER_AV1_USAGE_LOW_LATENCY 1
-  #define AMF_VIDEO_ENCODER_AV1_USAGE_ULTRA_LOW_LATENCY 2
-  #define AMF_VIDEO_ENCODER_AV1_USAGE_WEBCAM 3
-  #define AMF_VIDEO_ENCODER_AV1_USAGE_LOW_LATENCY_HIGH_QUALITY 5
-  #define AMF_VIDEO_ENCODER_HEVC_USAGE_TRANSCODING 0
-  #define AMF_VIDEO_ENCODER_HEVC_USAGE_ULTRA_LOW_LATENCY 1
-  #define AMF_VIDEO_ENCODER_HEVC_USAGE_LOW_LATENCY 2
-  #define AMF_VIDEO_ENCODER_HEVC_USAGE_WEBCAM 3
-  #define AMF_VIDEO_ENCODER_HEVC_USAGE_LOW_LATENCY_HIGH_QUALITY 5
-  #define AMF_VIDEO_ENCODER_USAGE_TRANSCODING 0
-  #define AMF_VIDEO_ENCODER_USAGE_ULTRA_LOW_LATENCY 1
-  #define AMF_VIDEO_ENCODER_USAGE_LOW_LATENCY 2
-  #define AMF_VIDEO_ENCODER_USAGE_WEBCAM 3
-  #define AMF_VIDEO_ENCODER_USAGE_LOW_LATENCY_HIGH_QUALITY 5
-  #define AMF_VIDEO_ENCODER_UNDEFINED 0
-  #define AMF_VIDEO_ENCODER_CABAC 1
-  #define AMF_VIDEO_ENCODER_CALV 2
-#else
+#if defined(_WIN32) && !defined(DOXYGEN)
   #ifdef _GLIBCXX_USE_C99_INTTYPES
     #undef _GLIBCXX_USE_C99_INTTYPES
   #endif
@@ -119,24 +46,150 @@ namespace config {
   #include <AMF/components/VideoEncoderVCE.h>
 #endif
 
+#if !defined(__ANDROID__) && !defined(__APPLE__)
+  // For NVENC legacy constants
+  #include <ffnvcodec/nvEncodeAPI.h>
+#endif
+
+#if defined(SUNSHINE_BUILD_VAAPI) && !defined(DOXYGEN)
+  // For VAAPI rate control types
+  #include <va/va.h>
+#endif
+
+namespace fs = std::filesystem;
+using namespace std::literals;
+
+constexpr auto CA_DIR = "credentials";  ///< Subdirectory under app data that stores Sunshine credentials.
+const std::string PRIVATE_KEY_FILE = std::string(CA_DIR) + "/cakey.pem";  ///< Relative path to the persisted private key PEM file.
+const std::string CERTIFICATE_FILE = std::string(CA_DIR) + "/cacert.pem";  ///< Relative path to the persisted certificate PEM file.
+const std::string APPS_JSON_PATH = platf::appdata().string() + "/apps.json";  ///< Default path to the applications JSON file.
+
+namespace config {
+
+  namespace nv {
+
+    std::string ffmpeg_preset_from_quality(const int quality_preset) {
+      return std::format("p{}", quality_preset);
+    }
+
+    /**
+     * @brief Parse the `nvenc_twopass` configuration value.
+     *
+     * @param preset Encoder preset value supplied by the configuration.
+     * @return Parsed enum value, or the setting-specific default when the text is unknown.
+     */
+    nvenc::nvenc_two_pass twopass_from_view(const std::string_view &preset) {
+      using enum nvenc::nvenc_two_pass;
+      if (preset == "disabled") {
+        return disabled;
+      }
+      if (preset == "quarter_res") {
+        return quarter_resolution;
+      }
+      if (preset == "full_res") {
+        return full_resolution;
+      }
+      BOOST_LOG(warning) << "config: unknown nvenc_twopass value: " << preset;
+      return quarter_resolution;
+    }
+
+    /**
+     * @brief Parse the `nvenc_split_encode` configuration value.
+     *
+     * @param preset Encoder preset value supplied by the configuration.
+     * @return Parsed enum value, or the setting-specific default when the text is unknown.
+     */
+    nvenc::nvenc_split_frame_encoding split_encode_from_view(const std::string_view &preset) {
+      using enum nvenc::nvenc_split_frame_encoding;
+      if (preset == "disabled") {
+        return disabled;
+      }
+      if (preset == "driver_decides") {
+        return driver_decides;
+      }
+      if (preset == "enabled") {
+        return force_enabled;
+      }
+      BOOST_LOG(warning) << "config: unknown nvenc_split_encode value: " << preset;
+      return driver_decides;
+    }
+
+  }  // namespace nv
+
+  namespace amd {
+#if !defined(_WIN32) || defined(DOXYGEN)
+    // values accurate as of 27/12/2022, but aren't strictly necessary for MacOS build
+    constexpr int AMF_VIDEO_ENCODER_AV1_QUALITY_PRESET_SPEED = 100;  ///< Fallback AMF enum value for av1 quality preset speed.
+    constexpr int AMF_VIDEO_ENCODER_AV1_QUALITY_PRESET_QUALITY = 30;  ///< Fallback AMF enum value for av1 quality preset quality.
+    constexpr int AMF_VIDEO_ENCODER_AV1_QUALITY_PRESET_BALANCED = 70;  ///< Fallback AMF enum value for av1 quality preset balanced.
+    constexpr int AMF_VIDEO_ENCODER_HEVC_QUALITY_PRESET_SPEED = 10;  ///< Fallback AMF enum value for hevc quality preset speed.
+    constexpr int AMF_VIDEO_ENCODER_HEVC_QUALITY_PRESET_QUALITY = 0;  ///< Fallback AMF enum value for hevc quality preset quality.
+    constexpr int AMF_VIDEO_ENCODER_HEVC_QUALITY_PRESET_BALANCED = 5;  ///< Fallback AMF enum value for hevc quality preset balanced.
+    constexpr int AMF_VIDEO_ENCODER_QUALITY_PRESET_SPEED = 1;  ///< Fallback AMF enum value for quality preset speed.
+    constexpr int AMF_VIDEO_ENCODER_QUALITY_PRESET_QUALITY = 2;  ///< Fallback AMF enum value for quality preset quality.
+    constexpr int AMF_VIDEO_ENCODER_QUALITY_PRESET_BALANCED = 0;  ///< Fallback AMF enum value for quality preset balanced.
+    constexpr int AMF_VIDEO_ENCODER_AV1_RATE_CONTROL_METHOD_CONSTANT_QP = 0;  ///< Fallback AMF enum value for av1 rate control method constant qp.
+    constexpr int AMF_VIDEO_ENCODER_AV1_RATE_CONTROL_METHOD_CBR = 3;  ///< Fallback AMF enum value for av1 rate control method cbr.
+    constexpr int AMF_VIDEO_ENCODER_AV1_RATE_CONTROL_METHOD_PEAK_CONSTRAINED_VBR = 2;  ///< Fallback AMF enum value for av1 rate control method peak constrained vbr.
+    constexpr int AMF_VIDEO_ENCODER_AV1_RATE_CONTROL_METHOD_LATENCY_CONSTRAINED_VBR = 1;  ///< Fallback AMF enum value for av1 rate control method latency constrained vbr.
+    constexpr int AMF_VIDEO_ENCODER_HEVC_RATE_CONTROL_METHOD_CONSTANT_QP = 0;  ///< Fallback AMF enum value for hevc rate control method constant qp.
+    constexpr int AMF_VIDEO_ENCODER_HEVC_RATE_CONTROL_METHOD_CBR = 3;  ///< Fallback AMF enum value for hevc rate control method cbr.
+    constexpr int AMF_VIDEO_ENCODER_HEVC_RATE_CONTROL_METHOD_PEAK_CONSTRAINED_VBR = 2;  ///< Fallback AMF enum value for hevc rate control method peak constrained vbr.
+    constexpr int AMF_VIDEO_ENCODER_HEVC_RATE_CONTROL_METHOD_LATENCY_CONSTRAINED_VBR = 1;  ///< Fallback AMF enum value for hevc rate control method latency constrained vbr.
+    constexpr int AMF_VIDEO_ENCODER_RATE_CONTROL_METHOD_CONSTANT_QP = 0;  ///< Fallback AMF enum value for rate control method constant qp.
+    constexpr int AMF_VIDEO_ENCODER_RATE_CONTROL_METHOD_CBR = 1;  ///< Fallback AMF enum value for rate control method cbr.
+    constexpr int AMF_VIDEO_ENCODER_RATE_CONTROL_METHOD_PEAK_CONSTRAINED_VBR = 2;  ///< Fallback AMF enum value for rate control method peak constrained vbr.
+    constexpr int AMF_VIDEO_ENCODER_RATE_CONTROL_METHOD_LATENCY_CONSTRAINED_VBR = 3;  ///< Fallback AMF enum value for rate control method latency constrained vbr.
+    constexpr int AMF_VIDEO_ENCODER_AV1_USAGE_TRANSCODING = 0;  ///< Fallback AMF enum value for av1 usage transcoding.
+    constexpr int AMF_VIDEO_ENCODER_AV1_USAGE_LOW_LATENCY = 1;  ///< Fallback AMF enum value for av1 usage low latency.
+    constexpr int AMF_VIDEO_ENCODER_AV1_USAGE_ULTRA_LOW_LATENCY = 2;  ///< Fallback AMF enum value for av1 usage ultra low latency.
+    constexpr int AMF_VIDEO_ENCODER_AV1_USAGE_WEBCAM = 3;  ///< Fallback AMF enum value for av1 usage webcam.
+    constexpr int AMF_VIDEO_ENCODER_AV1_USAGE_LOW_LATENCY_HIGH_QUALITY = 5;  ///< Fallback AMF enum value for av1 usage low latency high quality.
+    constexpr int AMF_VIDEO_ENCODER_HEVC_USAGE_TRANSCODING = 0;  ///< Fallback AMF enum value for hevc usage transcoding.
+    constexpr int AMF_VIDEO_ENCODER_HEVC_USAGE_ULTRA_LOW_LATENCY = 1;  ///< Fallback AMF enum value for hevc usage ultra low latency.
+    constexpr int AMF_VIDEO_ENCODER_HEVC_USAGE_LOW_LATENCY = 2;  ///< Fallback AMF enum value for hevc usage low latency.
+    constexpr int AMF_VIDEO_ENCODER_HEVC_USAGE_WEBCAM = 3;  ///< Fallback AMF enum value for hevc usage webcam.
+    constexpr int AMF_VIDEO_ENCODER_HEVC_USAGE_LOW_LATENCY_HIGH_QUALITY = 5;  ///< Fallback AMF enum value for hevc usage low latency high quality.
+    constexpr int AMF_VIDEO_ENCODER_USAGE_TRANSCODING = 0;  ///< Fallback AMF enum value for usage transcoding.
+    constexpr int AMF_VIDEO_ENCODER_USAGE_ULTRA_LOW_LATENCY = 1;  ///< Fallback AMF enum value for usage ultra low latency.
+    constexpr int AMF_VIDEO_ENCODER_USAGE_LOW_LATENCY = 2;  ///< Fallback AMF enum value for usage low latency.
+    constexpr int AMF_VIDEO_ENCODER_USAGE_WEBCAM = 3;  ///< Fallback AMF enum value for usage webcam.
+    constexpr int AMF_VIDEO_ENCODER_USAGE_LOW_LATENCY_HIGH_QUALITY = 5;  ///< Fallback AMF enum value for usage low latency high quality.
+    constexpr int AMF_VIDEO_ENCODER_UNDEFINED = 0;  ///< Fallback AMF enum value for undefined.
+    constexpr int AMF_VIDEO_ENCODER_CABAC = 1;  ///< Fallback AMF enum value for cabac.
+    constexpr int AMF_VIDEO_ENCODER_CALV = 2;  ///< Fallback AMF enum value for calv.
+#endif
+
+    /**
+     * @brief Enumerates supported quality AV1 options.
+     */
     enum class quality_av1_e : int {
       speed = AMF_VIDEO_ENCODER_AV1_QUALITY_PRESET_SPEED,  ///< Speed preset
       quality = AMF_VIDEO_ENCODER_AV1_QUALITY_PRESET_QUALITY,  ///< Quality preset
       balanced = AMF_VIDEO_ENCODER_AV1_QUALITY_PRESET_BALANCED  ///< Balanced preset
     };
 
+    /**
+     * @brief Enumerates supported quality HEVC options.
+     */
     enum class quality_hevc_e : int {
       speed = AMF_VIDEO_ENCODER_HEVC_QUALITY_PRESET_SPEED,  ///< Speed preset
       quality = AMF_VIDEO_ENCODER_HEVC_QUALITY_PRESET_QUALITY,  ///< Quality preset
       balanced = AMF_VIDEO_ENCODER_HEVC_QUALITY_PRESET_BALANCED  ///< Balanced preset
     };
 
+    /**
+     * @brief Enumerates supported quality h264 options.
+     */
     enum class quality_h264_e : int {
       speed = AMF_VIDEO_ENCODER_QUALITY_PRESET_SPEED,  ///< Speed preset
       quality = AMF_VIDEO_ENCODER_QUALITY_PRESET_QUALITY,  ///< Quality preset
       balanced = AMF_VIDEO_ENCODER_QUALITY_PRESET_BALANCED  ///< Balanced preset
     };
 
+    /**
+     * @brief Enumerates supported rc AV1 options.
+     */
     enum class rc_av1_e : int {
       cbr = AMF_VIDEO_ENCODER_AV1_RATE_CONTROL_METHOD_CBR,  ///< CBR
       cqp = AMF_VIDEO_ENCODER_AV1_RATE_CONTROL_METHOD_CONSTANT_QP,  ///< CQP
@@ -144,6 +197,9 @@ namespace config {
       vbr_peak = AMF_VIDEO_ENCODER_AV1_RATE_CONTROL_METHOD_PEAK_CONSTRAINED_VBR  ///< VBR with peak constraints
     };
 
+    /**
+     * @brief Enumerates supported rc HEVC options.
+     */
     enum class rc_hevc_e : int {
       cbr = AMF_VIDEO_ENCODER_HEVC_RATE_CONTROL_METHOD_CBR,  ///< CBR
       cqp = AMF_VIDEO_ENCODER_HEVC_RATE_CONTROL_METHOD_CONSTANT_QP,  ///< CQP
@@ -151,6 +207,9 @@ namespace config {
       vbr_peak = AMF_VIDEO_ENCODER_HEVC_RATE_CONTROL_METHOD_PEAK_CONSTRAINED_VBR  ///< VBR with peak constraints
     };
 
+    /**
+     * @brief Enumerates supported rc h264 options.
+     */
     enum class rc_h264_e : int {
       cbr = AMF_VIDEO_ENCODER_RATE_CONTROL_METHOD_CBR,  ///< CBR
       cqp = AMF_VIDEO_ENCODER_RATE_CONTROL_METHOD_CONSTANT_QP,  ///< CQP
@@ -158,6 +217,9 @@ namespace config {
       vbr_peak = AMF_VIDEO_ENCODER_RATE_CONTROL_METHOD_PEAK_CONSTRAINED_VBR  ///< VBR with peak constraints
     };
 
+    /**
+     * @brief Enumerates supported usage AV1 options.
+     */
     enum class usage_av1_e : int {
       transcoding = AMF_VIDEO_ENCODER_AV1_USAGE_TRANSCODING,  ///< Transcoding preset
       webcam = AMF_VIDEO_ENCODER_AV1_USAGE_WEBCAM,  ///< Webcam preset
@@ -166,6 +228,9 @@ namespace config {
       ultralowlatency = AMF_VIDEO_ENCODER_AV1_USAGE_ULTRA_LOW_LATENCY  ///< Ultra low latency preset
     };
 
+    /**
+     * @brief Enumerates supported usage HEVC options.
+     */
     enum class usage_hevc_e : int {
       transcoding = AMF_VIDEO_ENCODER_HEVC_USAGE_TRANSCODING,  ///< Transcoding preset
       webcam = AMF_VIDEO_ENCODER_HEVC_USAGE_WEBCAM,  ///< Webcam preset
@@ -174,6 +239,9 @@ namespace config {
       ultralowlatency = AMF_VIDEO_ENCODER_HEVC_USAGE_ULTRA_LOW_LATENCY  ///< Ultra low latency preset
     };
 
+    /**
+     * @brief Enumerates supported usage h264 options.
+     */
     enum class usage_h264_e : int {
       transcoding = AMF_VIDEO_ENCODER_USAGE_TRANSCODING,  ///< Transcoding preset
       webcam = AMF_VIDEO_ENCODER_USAGE_WEBCAM,  ///< Webcam preset
@@ -182,51 +250,93 @@ namespace config {
       ultralowlatency = AMF_VIDEO_ENCODER_USAGE_ULTRA_LOW_LATENCY  ///< Ultra low latency preset
     };
 
+    /**
+     * @brief Enumerates supported coder options.
+     */
     enum coder_e : int {
       _auto = AMF_VIDEO_ENCODER_UNDEFINED,  ///< Auto
       cabac = AMF_VIDEO_ENCODER_CABAC,  ///< CABAC
       cavlc = AMF_VIDEO_ENCODER_CALV  ///< CAVLC
     };
 
+    /**
+     * @brief Parse an AMD quality preset while preserving the current value on invalid input.
+     *
+     * @param quality_type Configuration text naming the AMD quality preset.
+     * @param original Original text value used when reporting a parsing failure.
+     * @return Parsed enum value, or the setting-specific default when the text is unknown.
+     */
     template<class T>
     ::std::optional<int> quality_from_view(const ::std::string_view &quality_type, const ::std::optional<int>(&original)) {
-#define _CONVERT_(x) \
-  if (quality_type == #x##sv) \
-  return (int) T::x
+#ifndef DOXYGEN
+  #define _CONVERT_(x) \
+    if (quality_type == #x##sv) \
+    return (int) T::x
+#endif
       _CONVERT_(balanced);
       _CONVERT_(quality);
       _CONVERT_(speed);
-#undef _CONVERT_
+#ifndef DOXYGEN
+  #undef _CONVERT_
+#endif
       return original;
     }
 
+    /**
+     * @brief Parse an AMD rate-control mode while preserving the current value on invalid input.
+     *
+     * @param rc Rate-control mode selected in the configuration.
+     * @param original Original text value used when reporting a parsing failure.
+     * @return Parsed enum value, or the setting-specific default when the text is unknown.
+     */
     template<class T>
     ::std::optional<int> rc_from_view(const ::std::string_view &rc, const ::std::optional<int>(&original)) {
-#define _CONVERT_(x) \
-  if (rc == #x##sv) \
-  return (int) T::x
+#ifndef DOXYGEN
+  #define _CONVERT_(x) \
+    if (rc == #x##sv) \
+    return (int) T::x
+#endif
       _CONVERT_(cbr);
       _CONVERT_(cqp);
       _CONVERT_(vbr_latency);
       _CONVERT_(vbr_peak);
-#undef _CONVERT_
+#ifndef DOXYGEN
+  #undef _CONVERT_
+#endif
       return original;
     }
 
+    /**
+     * @brief Parse an AMD encoder usage mode while preserving the current value on invalid input.
+     *
+     * @param usage Encoder usage mode selected in the configuration.
+     * @param original Original text value used when reporting a parsing failure.
+     * @return Parsed enum value, or the setting-specific default when the text is unknown.
+     */
     template<class T>
     ::std::optional<int> usage_from_view(const ::std::string_view &usage, const ::std::optional<int>(&original)) {
-#define _CONVERT_(x) \
-  if (usage == #x##sv) \
-  return (int) T::x
+#ifndef DOXYGEN
+  #define _CONVERT_(x) \
+    if (usage == #x##sv) \
+    return (int) T::x
+#endif
       _CONVERT_(lowlatency);
       _CONVERT_(lowlatency_high_quality);
       _CONVERT_(transcoding);
       _CONVERT_(ultralowlatency);
       _CONVERT_(webcam);
-#undef _CONVERT_
+#ifndef DOXYGEN
+  #undef _CONVERT_
+#endif
       return original;
     }
 
+    /**
+     * @brief Parse an entropy-coder mode from configuration text.
+     *
+     * @param coder Entropy-coder mode selected in the configuration.
+     * @return Parsed enum value, or the setting-specific default when the text is unknown.
+     */
     int coder_from_view(const ::std::string_view &coder) {
       if (coder == "auto"sv) {
         return _auto;
@@ -243,6 +353,9 @@ namespace config {
   }  // namespace amd
 
   namespace qsv {
+    /**
+     * @brief Enumerates supported preset options.
+     */
     enum preset_e : int {
       veryslow = 1,  ///< veryslow preset
       slower = 2,  ///< slower preset
@@ -253,16 +366,27 @@ namespace config {
       veryfast = 7  ///< veryfast preset
     };
 
+    /**
+     * @brief Enumerates supported cavlc options.
+     */
     enum cavlc_e : int {
       _auto = false,  ///< Auto
       enabled = true,  ///< Enabled
       disabled = false  ///< Disabled
     };
 
-    ::std::optional<int> preset_from_view(const ::std::string_view &preset) {
-#define _CONVERT_(x) \
-  if (preset == #x##sv) \
-  return x
+    /**
+     * @brief Parse a QSV encoder preset from configuration text.
+     *
+     * @param preset Encoder preset value supplied by the configuration.
+     * @return Parsed enum value, or the setting-specific default when the text is unknown.
+     */
+    std::optional<int> preset_from_view(const std::string_view &preset) {
+#ifndef DOXYGEN
+  #define _CONVERT_(x) \
+    if (preset == #x##sv) \
+    return x
+#endif
       _CONVERT_(veryslow);
       _CONVERT_(slower);
       _CONVERT_(slow);
@@ -270,11 +394,19 @@ namespace config {
       _CONVERT_(fast);
       _CONVERT_(faster);
       _CONVERT_(veryfast);
-#undef _CONVERT_
+#ifndef DOXYGEN
+  #undef _CONVERT_
+#endif
       return std::nullopt;
     }
 
-    ::std::optional<int> coder_from_view(const ::std::string_view &coder) {
+    /**
+     * @brief Parse an entropy-coder mode from configuration text.
+     *
+     * @param coder Entropy-coder mode selected in the configuration.
+     * @return Parsed enum value, or the setting-specific default when the text is unknown.
+     */
+    std::optional<int> coder_from_view(const std::string_view &coder) {
       if (coder == "auto"sv) {
         return _auto;
       }
@@ -289,15 +421,107 @@ namespace config {
 
   }  // namespace qsv
 
+  namespace vaapi {
+#if !defined(SUNSHINE_BUILD_VAAPI) || defined(DOXYGEN)
+    constexpr int VA_RC_CBR = 0x00000002;  ///< CBR rate control
+    constexpr int VA_RC_VBR = 0x00000004;  ///< VBR rate control
+    constexpr int VA_RC_CQP = 0x00000010;  ///< CQP rate control
+    constexpr int VA_RC_ICQ = 0x00000040;  ///< ICQ rate control
+    constexpr int VA_RC_QVBR = 0x00000400;  ///< QVBR rate control
+    constexpr int VA_RC_AVBR = 0x00000800;  ///< AVBR rate control
+#endif
+    /**
+     * @brief Enumerates supported VA-API quality options.
+     */
+    enum class quality_e : int {
+      _auto = 0,  ///< Auto quality level
+      speed = 1,  ///< Speed level
+      balanced = 2,  ///< Balanced level
+      quality = 3  ///< Quality level
+    };
+
+    /**
+     * @brief Enumerates supported VA-API rc options.
+     */
+    enum class rc_e : int {
+      _auto = 0,  ///< Auto rate control
+      avbr = VA_RC_AVBR,  ///< AVBR - average variable bitrate
+      cbr = VA_RC_CBR,  ///< CBR - constant bitrate
+      cqp = VA_RC_CQP,  ///< CQP - constant QP
+      icq = VA_RC_ICQ,  ///< ICQ - intelligent QP
+      qvbr = VA_RC_QVBR,  ///< QVBR - quality-defined variable bitrate
+      vbr = VA_RC_VBR  ///< VBR - variable bitrate
+    };
+
+    /**
+     * @brief Parse a VA-API quality preset while preserving the current value on invalid input.
+     *
+     * @param quality_type Configuration text naming the VA-API quality preset.
+     * @param original Original text value used when reporting a parsing failure.
+     * @return Parsed enum value, or the setting-specific default when the text is unknown.
+     */
+    template<class T>
+    ::std::optional<int> quality_from_view(const ::std::string_view &quality_type, const ::std::optional<int>(&original)) {
+#ifndef DOXYGEN
+  #define _CONVERT_(x) \
+    if (quality_type == #x##sv) \
+    return (int) T::x
+#endif
+      _CONVERT_(balanced);
+      _CONVERT_(quality);
+      _CONVERT_(speed);
+#ifdef _CONVERT_
+  #undef _CONVERT_
+#endif
+      return original;
+    }
+
+    /**
+     * @brief Parse a VA-API rate-control mode while preserving the current value on invalid input.
+     *
+     * @param rc Rate-control mode selected in the configuration.
+     * @param original Original text value used when reporting a parsing failure.
+     * @return Parsed enum value, or the setting-specific default when the text is unknown.
+     */
+    template<class T>
+    ::std::optional<int> rc_from_view(const ::std::string_view &rc, const ::std::optional<int>(&original)) {
+#ifndef DOXYGEN
+  #define _CONVERT_(x) \
+    if (rc == #x##sv) \
+    return (int) T::x
+#endif
+      _CONVERT_(avbr);
+      _CONVERT_(cbr);
+      _CONVERT_(cqp);
+      _CONVERT_(icq);
+      _CONVERT_(qvbr);
+      _CONVERT_(vbr);
+#ifdef _CONVERT_
+  #undef _CONVERT_
+#endif
+      return original;
+    }
+
+  }  // namespace vaapi
+
   namespace vt {
 
+    /**
+     * @brief Enumerates supported coder options.
+     */
     enum coder_e : int {
       _auto = 0,  ///< Auto
       cabac,  ///< CABAC
       cavlc  ///< CAVLC
     };
 
-    int coder_from_view(const ::std::string_view &coder) {
+    /**
+     * @brief Parse an entropy-coder mode from configuration text.
+     *
+     * @param coder Entropy-coder mode selected in the configuration.
+     * @return Parsed enum value, or the setting-specific default when the text is unknown.
+     */
+    int coder_from_view(const std::string_view &coder) {
       if (coder == "auto"sv) {
         return _auto;
       }
@@ -311,23 +535,13 @@ namespace config {
       return -1;
     }
 
-    int allow_software_from_view(const ::std::string_view &software) {
-      if (software == "allowed"sv || software == "forced") {
-        return 1;
-      }
-
-      return 0;
-    }
-
-    int force_software_from_view(const ::std::string_view &software) {
-      if (software == "forced") {
-        return 1;
-      }
-
-      return 0;
-    }
-
-    int rt_from_view(const ::std::string_view &rt) {
+    /**
+     * @brief Parse the VideoToolbox realtime encoder flag.
+     *
+     * @param rt Real-time encoder usage selector.
+     * @return Parsed enum value, or the setting-specific default when the text is unknown.
+     */
+    int rt_from_view(const std::string_view &rt) {
       if (rt == "disabled" || rt == "off" || rt == "0") {
         return 0;
       }
@@ -338,10 +552,18 @@ namespace config {
   }  // namespace vt
 
   namespace sw {
-    int svtav1_preset_from_view(const ::std::string_view &preset) {
-#define _CONVERT_(x, y) \
-  if (preset == #x##sv) \
-  return y
+    /**
+     * @brief Parse an SVT-AV1 speed preset from configuration text.
+     *
+     * @param preset Encoder preset value supplied by the configuration.
+     * @return Parsed enum value, or the setting-specific default when the text is unknown.
+     */
+    int svtav1_preset_from_view(const std::string_view &preset) {
+#ifndef DOXYGEN
+  #define _CONVERT_(x, y) \
+    if (preset == #x##sv) \
+    return y
+#endif
       _CONVERT_(veryslow, 1);
       _CONVERT_(slower, 2);
       _CONVERT_(slow, 4);
@@ -351,64 +573,112 @@ namespace config {
       _CONVERT_(veryfast, 10);
       _CONVERT_(superfast, 11);
       _CONVERT_(ultrafast, 12);
-#undef _CONVERT_
+#ifndef DOXYGEN
+  #undef _CONVERT_
+#endif
       return 11;  // Default to superfast
     }
   }  // namespace sw
 
   namespace dd {
-    video_t::dd_t::config_option_e config_option_from_view(const ::std::string_view value) {
-#define _CONVERT_(x) \
-  if (value == #x##sv) \
-  return video_t::dd_t::config_option_e::x
+    /**
+     * @brief Parse display-device preparation mode from configuration text.
+     *
+     * @param value Configuration text from the display-device preparation setting.
+     * @return Parsed enum value, or the setting-specific default when the text is unknown.
+     */
+    video_t::dd_t::config_option_e config_option_from_view(const std::string_view value) {
+#ifndef DOXYGEN
+  #define _CONVERT_(x) \
+    if (value == #x##sv) \
+    return video_t::dd_t::config_option_e::x
+#endif
       _CONVERT_(disabled);
       _CONVERT_(verify_only);
       _CONVERT_(ensure_active);
       _CONVERT_(ensure_primary);
       _CONVERT_(ensure_only_display);
-#undef _CONVERT_
+#ifndef DOXYGEN
+  #undef _CONVERT_
+#endif
       return video_t::dd_t::config_option_e::disabled;  // Default to this if value is invalid
     }
 
-    video_t::dd_t::resolution_option_e resolution_option_from_view(const ::std::string_view value) {
-#define _CONVERT_2_ARG_(str, val) \
-  if (value == #str##sv) \
-  return video_t::dd_t::resolution_option_e::val
-#define _CONVERT_(x) _CONVERT_2_ARG_(x, x)
+    /**
+     * @brief Parse display-device resolution mode from configuration text.
+     *
+     * @param value Configuration text from the display-device resolution setting.
+     * @return Parsed enum value, or the setting-specific default when the text is unknown.
+     */
+    video_t::dd_t::resolution_option_e resolution_option_from_view(const std::string_view value) {
+#ifndef DOXYGEN
+  #define _CONVERT_2_ARG_(str, val) \
+    if (value == #str##sv) \
+    return video_t::dd_t::resolution_option_e::val
+  #define _CONVERT_(x) _CONVERT_2_ARG_(x, x)
+#endif
       _CONVERT_(disabled);
       _CONVERT_2_ARG_(auto, automatic);
       _CONVERT_(manual);
-#undef _CONVERT_
-#undef _CONVERT_2_ARG_
+#ifndef DOXYGEN
+  #undef _CONVERT_
+  #undef _CONVERT_2_ARG_
+#endif
       return video_t::dd_t::resolution_option_e::disabled;  // Default to this if value is invalid
     }
 
-    video_t::dd_t::refresh_rate_option_e refresh_rate_option_from_view(const ::std::string_view value) {
-#define _CONVERT_2_ARG_(str, val) \
-  if (value == #str##sv) \
-  return video_t::dd_t::refresh_rate_option_e::val
-#define _CONVERT_(x) _CONVERT_2_ARG_(x, x)
+    /**
+     * @brief Parse display-device refresh-rate mode from configuration text.
+     *
+     * @param value Configuration text from the display-device refresh-rate setting.
+     * @return Parsed enum value, or the setting-specific default when the text is unknown.
+     */
+    video_t::dd_t::refresh_rate_option_e refresh_rate_option_from_view(const std::string_view value) {
+#ifndef DOXYGEN
+  #define _CONVERT_2_ARG_(str, val) \
+    if (value == #str##sv) \
+    return video_t::dd_t::refresh_rate_option_e::val
+  #define _CONVERT_(x) _CONVERT_2_ARG_(x, x)
+#endif
       _CONVERT_(disabled);
       _CONVERT_2_ARG_(auto, automatic);
       _CONVERT_(manual);
-#undef _CONVERT_
-#undef _CONVERT_2_ARG_
+#ifndef DOXYGEN
+  #undef _CONVERT_
+  #undef _CONVERT_2_ARG_
+#endif
       return video_t::dd_t::refresh_rate_option_e::disabled;  // Default to this if value is invalid
     }
 
-    video_t::dd_t::hdr_option_e hdr_option_from_view(const ::std::string_view value) {
-#define _CONVERT_2_ARG_(str, val) \
-  if (value == #str##sv) \
-  return video_t::dd_t::hdr_option_e::val
-#define _CONVERT_(x) _CONVERT_2_ARG_(x, x)
+    /**
+     * @brief Parse display-device HDR mode from configuration text.
+     *
+     * @param value Configuration text from the display-device HDR setting.
+     * @return Parsed enum value, or the setting-specific default when the text is unknown.
+     */
+    video_t::dd_t::hdr_option_e hdr_option_from_view(const std::string_view value) {
+#ifndef DOXYGEN
+  #define _CONVERT_2_ARG_(str, val) \
+    if (value == #str##sv) \
+    return video_t::dd_t::hdr_option_e::val
+  #define _CONVERT_(x) _CONVERT_2_ARG_(x, x)
+#endif
       _CONVERT_(disabled);
       _CONVERT_2_ARG_(auto, automatic);
-#undef _CONVERT_
-#undef _CONVERT_2_ARG_
+#ifndef DOXYGEN
+  #undef _CONVERT_
+  #undef _CONVERT_2_ARG_
+#endif
       return video_t::dd_t::hdr_option_e::disabled;  // Default to this if value is invalid
     }
 
-    video_t::dd_t::mode_remapping_t mode_remapping_from_view(const ::std::string_view value) {
+    /**
+     * @brief Parse display-mode remapping rules from JSON configuration text.
+     *
+     * @param value JSON array text from the display-device mode-remapping setting.
+     * @return Parsed enum value, or the setting-specific default when the text is unknown.
+     */
+    video_t::dd_t::mode_remapping_t mode_remapping_from_view(const std::string_view value) {
       const auto parse_entry_list {[](const auto &entry_list, auto &output_field) {
         for (auto &[_, entry] : entry_list) {
           auto requested_resolution = entry.template get_optional<std::string>("requested_resolution"s);
@@ -436,10 +706,13 @@ namespace config {
     }
   }  // namespace dd
 
+  /**
+   * @brief Default video configuration values used before file and CLI overrides.
+   */
   video_t video {
-    false, // headless_mode
-    true, // limit_framerate
-    false, // double_refreshrate
+    false,  // headless_mode
+    true,  // limit_framerate
+    false,  // double_refreshrate
 
     28,  // qp
 
@@ -447,6 +720,9 @@ namespace config {
     0,  // av1_mode
 
     2,  // min_threads
+
+    0,  // max_stream_width
+    0,  // max_stream_height
     {
       "superfast"s,  // preset
       "zerolatency"s,  // tune
@@ -466,33 +742,43 @@ namespace config {
     },  // qsv
 
     {
-      (int) amd::usage_h264_e::ultralowlatency,  // usage (h264)
-      (int) amd::usage_hevc_e::ultralowlatency,  // usage (hevc)
-      (int) amd::usage_av1_e::ultralowlatency,  // usage (av1)
-      (int) amd::rc_h264_e::vbr_latency,  // rate control (h264)
-      (int) amd::rc_hevc_e::vbr_latency,  // rate control (hevc)
-      (int) amd::rc_av1_e::vbr_latency,  // rate control (av1)
+      std::to_underlying(amd::usage_h264_e::ultralowlatency),  // usage (h264)
+      std::to_underlying(amd::usage_hevc_e::ultralowlatency),  // usage (hevc)
+      std::to_underlying(amd::usage_av1_e::ultralowlatency),  // usage (av1)
+      std::to_underlying(amd::rc_h264_e::vbr_latency),  // rate control (h264)
+      std::to_underlying(amd::rc_hevc_e::vbr_latency),  // rate control (hevc)
+      std::to_underlying(amd::rc_av1_e::vbr_latency),  // rate control (av1)
       0,  // enforce_hrd
-      (int) amd::quality_h264_e::balanced,  // quality (h264)
-      (int) amd::quality_hevc_e::balanced,  // quality (hevc)
-      (int) amd::quality_av1_e::balanced,  // quality (av1)
+      std::to_underlying(amd::quality_h264_e::balanced),  // quality (h264)
+      std::to_underlying(amd::quality_hevc_e::balanced),  // quality (hevc)
+      std::to_underlying(amd::quality_av1_e::balanced),  // quality (av1)
       0,  // preanalysis
       1,  // vbaq
-      (int) amd::coder_e::_auto,  // coder
+      {},  // max_au_size (disabled by default)
+      std::to_underlying(amd::coder_e::_auto),  // coder
     },  // amd
 
     {
-      0,
-      0,
       1,
       -1,
     },  // vt
 
     {
+      0,  // blbrc
+      std::to_underlying(vaapi::quality_e::_auto),  // quality
+      std::to_underlying(vaapi::rc_e::_auto),  // rate control
+      {},  // rate control string
       false,  // strict_rc_buffer
     },  // vaapi
 
+    {
+      2,  // vk.tune (default: ll - low latency)
+      2,  // vk.rc_mode (default: cbr)
+      2,  // vk.quality (default: 2 = balanced, 1 = speed, 3 = quality)
+    },
+
     {},  // capture
+    false,  // fp16_sdr_gamma_encoded
     {},  // encoder
     {},  // adapter_name
     {},  // output_name
@@ -514,19 +800,26 @@ namespace config {
     0,  // minimum_fps_target (0 = framerate)
 
     "1920x1080x60",  // fallback_mode
-    false, // isolated Display
-    false, // ignore_encoder_probe_failure
+    false,  // isolated_virtual_display_option
+    false,  // ignore_encoder_probe_failure
   };
 
+  /**
+   * @brief Default audio configuration values used before file and CLI overrides.
+   */
   audio_t audio {
     {},  // audio_sink
     {},  // virtual_sink
     true,  // stream audio
     true,  // install_steam_drivers
-    true, // keep_sink_default
-    true, // auto_capture
+    true,  // keep_sink_default
+    true,  // auto_capture
+    false,  // external_audio
   };
 
+  /**
+   * @brief Default stream configuration values used before file and CLI overrides.
+   */
   stream_t stream {
     10s,  // ping_timeout
 
@@ -536,8 +829,13 @@ namespace config {
 
     ENCRYPTION_MODE_NEVER,  // lan_encryption_mode
     ENCRYPTION_MODE_OPPORTUNISTIC,  // wan_encryption_mode
+    0,  // packetsize
+    true,  // dscp_tagging
   };
 
+  /**
+   * @brief Default NVHTTP server configuration values used before file and CLI overrides.
+   */
   nvhttp_t nvhttp {
     "lan",  // origin web manager
 
@@ -549,6 +847,9 @@ namespace config {
     {},  // external_ip
   };
 
+  /**
+   * @brief Default input configuration values used before file and CLI overrides.
+   */
   input_t input {
     {
       {0x10, 0xA0},
@@ -559,30 +860,32 @@ namespace config {
     500ms,  // key_repeat_delay
     std::chrono::duration<double> {1 / 24.9},  // key_repeat_period
 
-    {
-      platf::supported_gamepads(nullptr).front().name.data(),
-      platf::supported_gamepads(nullptr).front().name.size(),
-    },  // Default gamepad
-    true,  // back as touchpad click enabled (manual DS4 only)
-    true,  // client gamepads with motion events are emulated as DS4
-    true,  // client gamepads with touchpads are emulated as DS4
-    true,  // ds5_inputtino_randomize_mac
+    "auto",  // Default gamepad profile.
+    {},  // Windows requests a backend choice; macOS defaults to Virtual HID Broker.
+    true,  // back as touchpad click enabled for PlayStation-style gamepads
+    true,  // client gamepads with motion events use PlayStation-style emulation
+    true,  // client gamepads with touchpads use PlayStation-style emulation
+    true,  // virtualhid_randomize_mac
 
     true,  // keyboard enabled
+    false,  // key_rightalt_to_key_win
     true,  // mouse enabled
     true,  // controller enabled
     true,  // always send scancodes
     true,  // high resolution scrolling
     true,  // native pen/touch support
-    false, // enable input only mode
-    true, // forward_rumble
+    false,  // enable input only mode
+    true,  // forward_rumble
   };
 
+  /**
+   * @brief Default top-level Sunshine configuration values used before file and CLI overrides.
+   */
   sunshine_t sunshine {
-    false, // hide_tray_controls
-    true, // enable_pairing
-    true, // enable_discovery
-    false, // envvar_compatibility_mode
+    false,  // hide_tray_controls
+    true,  // enable_pairing
+    true,  // enable_discovery
+    false,  // envvar_compatibility_mode
     "en",  // locale
     2,  // min_log_level
     0,  // flags
@@ -594,6 +897,7 @@ namespace config {
     {},  // cmd args
     47989,  // Base port number
     "ipv4",  // Address family
+    {},  // Bind address
     platf::appdata().string() + "/sunshine.log",  // log file
     false,  // notify_pre_releases
     false,  // legacy_ordering
@@ -601,20 +905,46 @@ namespace config {
     {},  // prep commands
     {},  // state commands
     {},  // server commands
+    {},  // csrf_allowed_origins
   };
 
+  /**
+   * @brief Return whether a character terminates a configuration line.
+   *
+   * @param ch Character currently being classified by the parser.
+   * @return True when the tested parser condition is met.
+   */
   bool endline(char ch) {
     return ch == '\r' || ch == '\n';
   }
 
+  /**
+   * @brief Return whether a character is horizontal parser whitespace.
+   *
+   * @param ch Character currently being classified by the parser.
+   * @return True when the tested parser condition is met.
+   */
   bool space_tab(char ch) {
     return ch == ' ' || ch == '\t';
   }
 
+  /**
+   * @brief Return whether a character should be treated as parser whitespace.
+   *
+   * @param ch Character currently being classified by the parser.
+   * @return True when the tested parser condition is met.
+   */
   bool whitespace(char ch) {
     return space_tab(ch) || endline(ch);
   }
 
+  /**
+   * @brief Copy a configuration text range while stripping inline comments.
+   *
+   * @param begin Iterator or pointer marking the start of the input range.
+   * @param end Iterator or pointer marking the end of the input range.
+   * @return Value converted to string.
+   */
   std::string to_string(const char *begin, const char *end) {
     std::string result;
 
@@ -630,6 +960,13 @@ namespace config {
     return result;
   }
 
+  /**
+   * @brief Advance over a bracketed list while honoring nested brackets.
+   *
+   * @param skipper Function used to skip characters while parsing.
+   * @param end Iterator or pointer marking the end of the input range.
+   * @return Iterator positioned after the matching closing bracket or at the end.
+   */
   template<class It>
   It skip_list(It skipper, It end) {
     int stack = 1;
@@ -648,9 +985,16 @@ namespace config {
   }
 
   std::pair<
-    ::std::string_view::const_iterator,
-    ::std::optional<std::pair<std::string, std::string>>>
-    parse_option(::std::string_view::const_iterator begin, ::std::string_view::const_iterator end) {
+    std::string_view::const_iterator,
+    std::optional<std::pair<std::string, std::string>>>
+    /**
+     * @brief Parse one `name = value` configuration entry.
+     *
+     * @param begin Iterator or pointer marking the start of the input range.
+     * @param end Iterator or pointer marking the end of the input range.
+     * @return Iterator for the next line and the parsed key-value pair when one was found.
+     */
+    parse_option(std::string_view::const_iterator begin, std::string_view::const_iterator end) {
     begin = std::find_if_not(begin, end, whitespace);
     auto endl = std::find_if(begin, end, endline);
     auto endc = std::find(begin, endl, '#');
@@ -688,14 +1032,16 @@ namespace config {
     );
   }
 
-  std::unordered_map<std::string, std::string> parse_config(const ::std::string_view &file_content) {
-    std::unordered_map<std::string, std::string> vars;
+  /**
+   * @brief Parse Sunshine configuration text into key-value entries.
+   */
+  config_map_t parse_config(const std::string_view &file_content) {
+    config_map_t vars;
 
     auto pos = std::begin(file_content);
     auto end = std::end(file_content);
 
     while (pos < end) {
-      // auto newline = std::find_if(pos, end, [](auto ch) { return ch == '\n' || ch == '\r'; });
       TUPLE_2D(endl, var, parse_option(pos, end));
 
       pos = endl;
@@ -707,45 +1053,131 @@ namespace config {
         continue;
       }
 
-      vars.emplace(std::move(*var));
+      vars.try_emplace(std::move(var->first), std::move(var->second));
     }
 
     return vars;
   }
 
-  void string_f(std::unordered_map<std::string, std::string> &vars, const std::string &name, std::string &input) {
+  bool persist_config_option_if_missing(const std::string_view name, const std::string_view value) {
+    auto file_content = file_handler::read_file(sunshine.config_file.c_str());
+    if (parse_config(file_content).contains(std::string {name})) {
+      return false;
+    }
+
+    if (!file_content.empty() && file_content.back() != '\n') {
+      file_content += '\n';
+    }
+    file_content += std::format("{} = {}\n", name, value);
+    if (file_handler::write_file(sunshine.config_file.c_str(), file_content) != 0) {
+      BOOST_LOG(warning) << "Failed to persist automatically selected config option '"sv << name << "'"sv;
+      return false;
+    }
+
+    BOOST_LOG(info) << "Automatically selected config option '"sv << name << "' = "sv << value;
+    return true;
+  }
+
+  bool select_all_gamepad_drivers_if_licensed(const bool virtualhid_licensed) {
+    if (!virtualhid_licensed || !input.gamepad_driver.empty() || !persist_config_option_if_missing("gamepad_driver", GAMEPAD_DRIVER_ALL)) {
+      return false;
+    }
+
+    input.gamepad_driver = GAMEPAD_DRIVER_ALL;
+    return true;
+  }
+
+  /**
+   * @brief Consume a string setting from the parsed configuration map.
+   *
+   * @param vars Parsed configuration entries; consumed keys are erased.
+   * @param name Configuration key to consume.
+   * @param destination Destination field updated when the setting exists and parses successfully.
+   */
+  void string_f(config_map_t &vars, const std::string &name, std::string &destination) {
     auto it = vars.find(name);
     if (it == std::end(vars)) {
       return;
     }
 
-    input = std::move(it->second);
+    destination = std::move(it->second);
 
     vars.erase(it);
   }
 
+  /**
+   * @brief Consume a setting and convert it with a caller-provided parser.
+   *
+   * @param vars Parsed configuration entries; consumed keys are erased.
+   * @param name Configuration key to consume.
+   * @param destination Destination field updated when the setting exists and parses successfully.
+   * @param f Converter applied to the raw configuration string.
+   */
   template<typename T, typename F>
-  void generic_f(std::unordered_map<std::string, std::string> &vars, const std::string &name, T &input, F &&f) {
+  void generic_f(config_map_t &vars, const std::string &name, T &destination, F &&f) {
     std::string tmp;
     string_f(vars, name, tmp);
     if (!tmp.empty()) {
-      input = f(tmp);
+      destination = f(tmp);
     }
   }
 
-  void string_restricted_f(std::unordered_map<std::string, std::string> &vars, const std::string &name, std::string &input, const std::vector<::std::string_view> &allowed_vals) {
+  /**
+   * @brief Consume a string setting only when it matches an allowed value.
+   *
+   * @param vars Parsed configuration entries; consumed keys are erased.
+   * @param name Configuration key to consume.
+   * @param destination Destination field updated when the setting exists and parses successfully.
+   * @param allowed_vals Accepted string values for this setting.
+   */
+  void string_restricted_f(config_map_t &vars, const std::string &name, std::string &destination, const std::vector<std::string_view> &allowed_vals) {
     std::string temp;
     string_f(vars, name, temp);
 
     for (auto &allowed_val : allowed_vals) {
       if (temp == allowed_val) {
-        input = std::move(temp);
+        destination = std::move(temp);
         return;
       }
     }
   }
 
-  void path_f(std::unordered_map<std::string, std::string> &vars, const std::string &name, fs::path &input) {
+  /**
+   * @brief Parse a comma-separated string setting into a list.
+   *
+   * @param vars Configuration key-value map.
+   * @param name Setting name.
+   * @param output Parsed string list.
+   */
+  void string_list_f(config_map_t &vars, const std::string &name, std::vector<std::string> &output) {
+    std::string temp;
+    string_f(vars, name, temp);
+
+    if (temp.empty()) {
+      return;
+    }
+
+    output.clear();
+    std::stringstream ss(temp);
+    std::string item;
+    while (std::getline(ss, item, ',')) {
+      // Trim whitespace
+      item.erase(0, item.find_first_not_of(" \t\r\n"));
+      item.erase(item.find_last_not_of(" \t\r\n") + 1);
+      if (!item.empty()) {
+        output.push_back(item);
+      }
+    }
+  }
+
+  /**
+   * @brief Consume a path setting and normalize it under the app data directory when relative.
+   *
+   * @param vars Parsed configuration entries; consumed keys are erased.
+   * @param name Configuration key to consume.
+   * @param destination Destination field updated when the setting exists and parses successfully.
+   */
+  void path_f(config_map_t &vars, const std::string &name, fs::path &destination) {
     // appdata needs to be retrieved once only
     static auto appdata = platf::appdata();
 
@@ -753,14 +1185,14 @@ namespace config {
     string_f(vars, name, temp);
 
     if (!temp.empty()) {
-      input = temp;
+      destination = temp;
     }
 
-    if (input.is_relative()) {
-      input = appdata / input;
+    if (destination.is_relative()) {
+      destination = appdata / destination;
     }
 
-    auto dir = input;
+    auto dir = destination;
     dir.remove_filename();
 
     // Ensure the directories exists
@@ -769,93 +1201,135 @@ namespace config {
     }
   }
 
-  void path_f(std::unordered_map<std::string, std::string> &vars, const std::string &name, std::string &input) {
-    fs::path temp = input;
+  /**
+   * @brief Consume a path setting and normalize it under the app data directory when relative.
+   *
+   * @param vars Parsed configuration entries; consumed keys are erased.
+   * @param name Configuration key to consume.
+   * @param destination Destination field updated when the setting exists and parses successfully.
+   */
+  void path_f(config_map_t &vars, const std::string &name, std::string &destination) {
+    fs::path temp = destination;
 
     path_f(vars, name, temp);
 
-    input = temp.string();
+    destination = temp.string();
   }
 
-  void int_f(std::unordered_map<std::string, std::string> &vars, const std::string &name, int &input) {
+  /**
+   * @brief Parse a decimal or hexadecimal integer configuration value.
+   *
+   * @param value Raw configuration value, optionally surrounded by quotes.
+   * @return Parsed integer value.
+   */
+  int parse_config_integer(std::string_view value) {
+    if (value.size() >= 2 && value.front() == '"') {
+      value = value.substr(1, value.size() - 2);
+    }
+
+    if (value.starts_with("0x"sv)) {
+      return util::from_hex<int>(value.substr(2));
+    }
+    return static_cast<int>(util::from_view(value));
+  }
+
+  /**
+   * @brief Consume an integer setting from decimal or hexadecimal configuration text.
+   *
+   * @param vars Parsed configuration entries; consumed keys are erased.
+   * @param name Configuration key to consume.
+   * @param destination Destination field updated when the setting exists and parses successfully.
+   */
+  void int_f(config_map_t &vars, const std::string &name, int &destination) {
     auto it = vars.find(name);
 
     if (it == std::end(vars)) {
       return;
     }
 
-    ::std::string_view val = it->second;
-
-    // If value is something like: "756" instead of 756
-    if (val.size() >= 2 && val[0] == '"') {
-      val = val.substr(1, val.size() - 2);
-    }
-
-    // If that integer is in hexadecimal
-    if (val.size() >= 2 && val.substr(0, 2) == "0x"sv) {
-      input = util::from_hex<int>(val.substr(2));
-    } else {
-      input = util::from_view(val);
-    }
-
+    destination = parse_config_integer(it->second);
     vars.erase(it);
   }
 
-  void int_f(std::unordered_map<std::string, std::string> &vars, const std::string &name, ::std::optional<int> &input) {
+  /**
+   * @brief Consume an integer setting from decimal or hexadecimal configuration text.
+   *
+   * @param vars Parsed configuration entries; consumed keys are erased.
+   * @param name Configuration key to consume.
+   * @param destination Destination field updated when the setting exists and parses successfully.
+   */
+  void int_f(config_map_t &vars, const std::string &name, std::optional<int> &destination) {
     auto it = vars.find(name);
 
     if (it == std::end(vars)) {
       return;
     }
 
-    ::std::string_view val = it->second;
-
-    // If value is something like: "756" instead of 756
-    if (val.size() >= 2 && val[0] == '"') {
-      val = val.substr(1, val.size() - 2);
-    }
-
-    // If that integer is in hexadecimal
-    if (val.size() >= 2 && val.substr(0, 2) == "0x"sv) {
-      input = util::from_hex<int>(val.substr(2));
-    } else {
-      input = util::from_view(val);
-    }
-
+    destination = parse_config_integer(it->second);
     vars.erase(it);
   }
 
+  /**
+   * @brief Consume an integer setting from decimal or hexadecimal configuration text.
+   *
+   * @param vars Parsed configuration entries; consumed keys are erased.
+   * @param name Configuration key to consume.
+   * @param destination Destination field updated when the setting exists and parses successfully.
+   * @param f Converter applied to the raw configuration string.
+   */
   template<class F>
-  void int_f(std::unordered_map<std::string, std::string> &vars, const std::string &name, int &input, F &&f) {
+  void int_f(config_map_t &vars, const std::string &name, int &destination, F &&f) {
     std::string tmp;
     string_f(vars, name, tmp);
     if (!tmp.empty()) {
-      input = f(tmp);
+      destination = f(tmp);
     }
   }
 
+  /**
+   * @brief Consume an integer setting from decimal or hexadecimal configuration text.
+   *
+   * @param vars Parsed configuration entries; consumed keys are erased.
+   * @param name Configuration key to consume.
+   * @param destination Destination field updated when the setting exists and parses successfully.
+   * @param f Converter applied to the raw configuration string.
+   */
   template<class F>
-  void int_f(std::unordered_map<std::string, std::string> &vars, const std::string &name, ::std::optional<int> &input, F &&f) {
+  void int_f(config_map_t &vars, const std::string &name, std::optional<int> &destination, F &&f) {
     std::string tmp;
     string_f(vars, name, tmp);
     if (!tmp.empty()) {
-      input = f(tmp);
+      destination = f(tmp);
     }
   }
 
-  void int_between_f(std::unordered_map<std::string, std::string> &vars, const std::string &name, int &input, const std::pair<int, int> &range) {
-    int temp = input;
+  /**
+   * @brief Consume an integer setting only when it falls inside an inclusive range.
+   *
+   * @param vars Parsed configuration entries; consumed keys are erased.
+   * @param name Configuration key to consume.
+   * @param destination Destination field updated when the setting exists and parses successfully.
+   * @param range Inclusive range accepted for the parsed value.
+   */
+  void int_between_f(config_map_t &vars, const std::string &name, int &destination, const std::pair<int, int> &range) {
+    int temp = destination;
 
     int_f(vars, name, temp);
 
     TUPLE_2D_REF(lower, upper, range);
     if (temp >= lower && temp <= upper) {
-      input = temp;
+      destination = temp;
     }
   }
 
+  /**
+   * @brief Convert common textual boolean forms to a boolean value.
+   *
+   * @param boolean Configuration string to classify as enabled or disabled.
+   * @return True when the tested parser condition is met.
+   */
   bool to_bool(std::string &boolean) {
-    std::for_each(std::begin(boolean), std::end(boolean), [](char ch) {
+    std::transform(std::begin(boolean), std::end(boolean), std::begin(boolean), [](unsigned char ch) {
       return (char) std::tolower(ch);
     });
 
@@ -867,7 +1341,14 @@ namespace config {
            (std::find(std::begin(boolean), std::end(boolean), '1') != std::end(boolean));
   }
 
-  void bool_f(std::unordered_map<std::string, std::string> &vars, const std::string &name, bool &input) {
+  /**
+   * @brief Consume a boolean setting from the parsed configuration map.
+   *
+   * @param vars Parsed configuration entries; consumed keys are erased.
+   * @param name Configuration key to consume.
+   * @param destination Destination field updated when the setting exists and parses successfully.
+   */
+  void bool_f(config_map_t &vars, const std::string &name, bool &destination) {
     std::string tmp;
     string_f(vars, name, tmp);
 
@@ -875,10 +1356,17 @@ namespace config {
       return;
     }
 
-    input = to_bool(tmp);
+    destination = to_bool(tmp);
   }
 
-  void double_f(std::unordered_map<std::string, std::string> &vars, const std::string &name, double &input) {
+  /**
+   * @brief Consume a floating-point setting from the parsed configuration map.
+   *
+   * @param vars Parsed configuration entries; consumed keys are erased.
+   * @param name Configuration key to consume.
+   * @param destination Destination field updated when the setting exists and parses successfully.
+   */
+  void double_f(config_map_t &vars, const std::string &name, double &destination) {
     std::string tmp;
     string_f(vars, name, tmp);
 
@@ -893,21 +1381,36 @@ namespace config {
       return;
     }
 
-    input = val;
+    destination = val;
   }
 
-  void double_between_f(std::unordered_map<std::string, std::string> &vars, const std::string &name, double &input, const std::pair<double, double> &range) {
-    double temp = input;
+  /**
+   * @brief Consume a floating-point setting only when it falls inside an inclusive range.
+   *
+   * @param vars Parsed configuration entries; consumed keys are erased.
+   * @param name Configuration key to consume.
+   * @param destination Destination field updated when the setting exists and parses successfully.
+   * @param range Inclusive range accepted for the parsed value.
+   */
+  void double_between_f(config_map_t &vars, const std::string &name, double &destination, const std::pair<double, double> &range) {
+    double temp = destination;
 
     double_f(vars, name, temp);
 
     TUPLE_2D_REF(lower, upper, range);
     if (temp >= lower && temp <= upper) {
-      input = temp;
+      destination = temp;
     }
   }
 
-  void list_string_f(std::unordered_map<std::string, std::string> &vars, const std::string &name, std::vector<std::string> &input) {
+  /**
+   * @brief Consume a comma-separated or bracketed string list setting.
+   *
+   * @param vars Parsed configuration entries; consumed keys are erased.
+   * @param name Configuration key to consume.
+   * @param destination Destination field updated when the setting exists and parses successfully.
+   */
+  void list_string_f(config_map_t &vars, const std::string &name, std::vector<std::string> &destination) {
     std::string string;
     string_f(vars, name, string);
 
@@ -915,7 +1418,7 @@ namespace config {
       return;
     }
 
-    input.clear();
+    destination.clear();
 
     auto begin = std::cbegin(string);
     if (*begin == '[') {
@@ -934,7 +1437,7 @@ namespace config {
       } else if (*pos == ']') {
         break;
       } else if (*pos == ',') {
-        input.emplace_back(begin, pos);
+        destination.emplace_back(begin, pos);
         pos = begin = std::find_if_not(pos + 1, std::cend(string), whitespace);
       } else {
         ++pos;
@@ -942,11 +1445,18 @@ namespace config {
     }
 
     if (pos != begin) {
-      input.emplace_back(begin, pos);
+      destination.emplace_back(begin, pos);
     }
   }
 
-  void list_prep_cmd_f(std::unordered_map<std::string, std::string> &vars, const std::string &name, std::vector<prep_cmd_t> &input) {
+  /**
+   * @brief Consume the JSON preparation-command list setting.
+   *
+   * @param vars Parsed configuration entries; consumed keys are erased.
+   * @param name Configuration key to consume.
+   * @param destination Destination field updated when the setting exists and parses successfully.
+   */
+  void list_prep_cmd_f(config_map_t &vars, const std::string &name, std::vector<prep_cmd_t> &destination) {
     std::string string;
     string_f(vars, name, string);
 
@@ -968,15 +1478,20 @@ namespace config {
       auto undo_cmd = prep_cmd.get_optional<std::string>("undo"s);
       auto elevated = prep_cmd.get_optional<bool>("elevated"s);
 
-      input.emplace_back(do_cmd.value_or(""), undo_cmd.value_or(""), elevated.value_or(false));
+      destination.emplace_back(do_cmd.value_or(""), undo_cmd.value_or(""), elevated.value_or(false));
     }
   }
 
-  void list_server_cmd_f(std::unordered_map<std::string, std::string> &vars, const std::string &name, std::vector<server_cmd_t> &input) {
+  /**
+   * @brief Consume the Apollo server-command list from JSON configuration text.
+   *
+   * @param vars Parsed configuration entries; consumed keys are erased.
+   * @param name Configuration key to consume.
+   * @param destination Destination list updated when the setting exists and parses successfully.
+   */
+  void list_server_cmd_f(config_map_t &vars, const std::string &name, std::vector<server_cmd_t> &destination) {
     std::string string;
     string_f(vars, name, string);
-
-    std::stringstream jsonStream;
 
     // check if string is empty, i.e. when the value doesn't exist in the config file
     if (string.empty()) {
@@ -984,21 +1499,29 @@ namespace config {
     }
 
     // We need to add a wrapping object to make it valid JSON, otherwise ptree cannot parse it.
+    std::stringstream jsonStream;
     jsonStream << "{\"server_cmd\":" << string << "}";
 
     boost::property_tree::ptree jsonTree;
     boost::property_tree::read_json(jsonStream, jsonTree);
 
-    for (auto &[_, prep_cmd] : jsonTree.get_child("server_cmd"s)) {
-      auto cmd_name = prep_cmd.get_optional<std::string>("name"s);
-      auto cmd_val = prep_cmd.get_optional<std::string>("cmd"s);
-      auto elevated = prep_cmd.get_optional<bool>("elevated"s);
+    for (auto &[_, server_cmd] : jsonTree.get_child("server_cmd"s)) {
+      auto cmd_name = server_cmd.get_optional<std::string>("name"s);
+      auto cmd_val = server_cmd.get_optional<std::string>("cmd"s);
+      auto elevated = server_cmd.get_optional<bool>("elevated"s);
 
-      input.emplace_back(cmd_name.value_or(""), cmd_val.value_or(""), elevated.value_or(false));
+      destination.emplace_back(cmd_name.value_or(""), cmd_val.value_or(""), elevated.value_or(false));
     }
   }
 
-  void list_int_f(std::unordered_map<std::string, std::string> &vars, const std::string &name, std::vector<int> &input) {
+  /**
+   * @brief Consume an integer list setting from decimal or hexadecimal configuration text.
+   *
+   * @param vars Parsed configuration entries; consumed keys are erased.
+   * @param name Configuration key to consume.
+   * @param destination Destination field updated when the setting exists and parses successfully.
+   */
+  void list_int_f(config_map_t &vars, const std::string &name, std::vector<int> &destination) {
     std::vector<std::string> list;
     list_string_f(vars, name, list);
 
@@ -1010,9 +1533,9 @@ namespace config {
     // The framerate list must be cleared before adding values from the file configuration.
     // If the list is not cleared, then the specified parameters do not affect the behavior of the sunshine server.
     // That is, if you set only 30 fps in the configuration file, it will not work because by default, during initialization the list includes 10, 30, 60, 90 and 120 fps.
-    input.clear();
+    destination.clear();
     for (auto &el : list) {
-      ::std::string_view val = el;
+      std::string_view val = el;
 
       // If value is something like: "756" instead of 756
       if (val.size() >= 2 && val[0] == '"') {
@@ -1025,13 +1548,20 @@ namespace config {
       if (val.size() >= 2 && val.substr(0, 2) == "0x"sv) {
         tmp = util::from_hex<int>(val.substr(2));
       } else {
-        tmp = util::from_view(val);
+        tmp = (int) util::from_view(val);
       }
-      input.emplace_back(tmp);
+      destination.emplace_back(tmp);
     }
   }
 
-  void map_int_int_f(std::unordered_map<std::string, std::string> &vars, const std::string &name, std::unordered_map<int, int> &input) {
+  /**
+   * @brief Consume an integer-pair list into a mapping table.
+   *
+   * @param vars Parsed configuration entries; consumed keys are erased.
+   * @param name Configuration key to consume.
+   * @param destination Destination field updated when the setting exists and parses successfully.
+   */
+  void map_int_int_f(config_map_t &vars, const std::string &name, std::unordered_map<int, int> &destination) {
     std::vector<int> list;
     list_int_f(vars, name, list);
 
@@ -1046,10 +1576,16 @@ namespace config {
       auto key = list[x++];
       auto val = list[x++];
 
-      input.emplace(key, val);
+      destination.emplace(key, val);
     }
   }
 
+  /**
+   * @brief Apply single-character command-line flags to the global Sunshine flags bitset.
+   *
+   * @param line Configuration line being parsed.
+   * @return 0 when all flags are recognized; -1 when at least one flag is unknown.
+   */
   int apply_flags(const char *line) {
     int ret = 0;
     while (*line != '\0') {
@@ -1077,40 +1613,118 @@ namespace config {
     return ret;
   }
 
-  std::vector<::std::string_view> &get_supported_gamepad_options() {
-    const auto options = platf::supported_gamepads(nullptr);
-    static std::vector<::std::string_view> opts {};
-    opts.reserve(options.size());
-    for (auto &opt : options) {
-      opts.emplace_back(opt.name);
-    }
-    return opts;
+  /**
+   * @brief Get supported gamepad options.
+   *
+   * @return Platform-supported gamepad backend names accepted by configuration.
+   */
+  const std::vector<std::string_view> &get_supported_gamepad_options() {
+    static const auto gamepads = platf::supported_gamepads(nullptr);
+    static const auto options = []() {
+      std::vector<std::string_view> names;
+      names.reserve(gamepads.size());
+      for (const auto &gamepad : gamepads) {
+        names.emplace_back(gamepad.name);
+      }
+      return names;
+    }();
+    return options;
   }
 
-  void apply_config(std::unordered_map<std::string, std::string> &&vars) {
-#ifndef __ANDROID__
-    // TODO: Android can possibly support this
-    if (!fs::exists(stream.file_apps.c_str())) {
-      fs::copy_file(SUNSHINE_ASSETS_DIR "/apps.json", stream.file_apps);
-    }
-#endif
-
+  /**
+   * @brief Log parsed configuration entries and optionally record them as modified.
+   */
+  void log_config_settings(const config_map_t &vars, bool save) {
     for (auto &[name, val] : vars) {
-    #ifdef _WIN32
-      BOOST_LOG(info) << "config: ["sv << name << "] -- ["sv << utf8ToAcp(val) << ']';
-    #else
-      BOOST_LOG(info) << "config: ["sv << name << "] -- ["sv << val << ']';
-    #endif
-      modified_config_settings[name] = val;
+      bool is_redacted = std::ranges::find(config::redacted_config, name) != config::redacted_config.end();
+
+      BOOST_LOG(info) << "config: '"sv << name << "' = "sv << (is_redacted ? "[redacted]" : val);
+
+      if (save) {
+        modified_config_settings[name] = val;
+      }
     }
+  }
+
+  bool cap_stream_resolution(int &width, int &height) {
+    if (video.max_stream_width <= 0 || video.max_stream_height <= 0 || width <= 0 || height <= 0 || (width <= video.max_stream_width && height <= video.max_stream_height)) {
+      return false;
+    }
+
+    // Scale by whichever dimension is further over its limit, in integer math so that dimension
+    // lands exactly on the cap.
+    const std::int64_t w = width;
+    const std::int64_t h = height;
+    const bool width_limited = w * video.max_stream_height >= h * video.max_stream_width;
+    const auto scaled_width = width_limited ? video.max_stream_width : static_cast<int>(w * video.max_stream_height / h);
+    const auto scaled_height = width_limited ? static_cast<int>(h * video.max_stream_width / w) : video.max_stream_height;
+    // Encoders and decoders expect even dimensions
+    const int capped_width = std::max(2, scaled_width & ~1);
+    const int capped_height = std::max(2, scaled_height & ~1);
+    BOOST_LOG(info) << "Capping stream resolution: "sv << width << 'x' << height
+                    << " -> "sv << capped_width << 'x' << capped_height;
+    width = capped_width;
+    height = capped_height;
+    return true;
+  }
+
+  /**
+   * @brief Parse a `<width>x<height>` resolution string.
+   *
+   * @param value Resolution text such as `2560x1440`.
+   * @param width Parsed width, written only on success.
+   * @param height Parsed height, written only on success.
+   * @return `true` when both dimensions are at least 2, the smallest even size the cap can produce.
+   */
+  bool parse_stream_resolution(const std::string_view &value, int &width, int &height) {
+    const auto separator = value.find('x');
+    if (separator == std::string::npos) {
+      return false;
+    }
+
+    const auto *const begin = value.data();
+    const auto *const end = begin + value.size();
+
+    int parsed_width = 0;
+    const auto [width_end, width_ec] = std::from_chars(begin, begin + separator, parsed_width);
+    if (width_ec != std::errc {} || width_end != begin + separator || parsed_width < 2) {
+      return false;
+    }
+
+    int parsed_height = 0;
+    const auto [height_end, height_ec] = std::from_chars(begin + separator + 1, end, parsed_height);
+    if (height_ec != std::errc {} || height_end != end || parsed_height < 2) {
+      return false;
+    }
+
+    width = parsed_width;
+    height = parsed_height;
+    return true;
+  }
+
+  /**
+   * @brief Apply parsed configuration entries to the global runtime configuration.
+   *
+   * @param vars Parsed configuration entries; consumed keys are erased.
+   */
+  void apply_config(config_map_t &&vars) {
+    log_config_settings(vars, true);
 
     bool_f(vars, "headless_mode", video.headless_mode);
     bool_f(vars, "limit_framerate", video.limit_framerate);
     bool_f(vars, "double_refreshrate", video.double_refreshrate);
+
     int_f(vars, "qp", video.qp);
     int_between_f(vars, "hevc_mode", video.hevc_mode, {0, 3});
     int_between_f(vars, "av1_mode", video.av1_mode, {0, 3});
     int_f(vars, "min_threads", video.min_threads);
+
+    std::string max_stream_resolution;
+    string_f(vars, "max_stream_resolution", max_stream_resolution);
+    if (!max_stream_resolution.empty() && !parse_stream_resolution(max_stream_resolution, video.max_stream_width, video.max_stream_height)) {
+      BOOST_LOG(warning) << "max_stream_resolution must be formatted as <width>x<height>, e.g. 2560x1440: "sv << max_stream_resolution;
+    }
+
     string_f(vars, "sw_preset", video.sw.sw_preset);
     if (!video.sw.sw_preset.empty()) {
       video.sw.svtav1_preset = sw::svtav1_preset_from_view(video.sw.sw_preset);
@@ -1123,17 +1737,18 @@ namespace config {
     generic_f(vars, "nvenc_twopass", video.nv.two_pass, nv::twopass_from_view);
     bool_f(vars, "nvenc_h264_cavlc", video.nv.h264_cavlc);
     bool_f(vars, "nvenc_intra_refresh", video.nv.intra_refresh);
+    generic_f(vars, "nvenc_split_encode", video.nv.split_frame_encoding, nv::split_encode_from_view);
     bool_f(vars, "nvenc_realtime_hags", video.nv_realtime_hags);
     bool_f(vars, "nvenc_opengl_vulkan_on_dxgi", video.nv_opengl_vulkan_on_dxgi);
     bool_f(vars, "nvenc_latency_over_power", video.nv_sunshine_high_power_mode);
 
 #if !defined(__ANDROID__) && !defined(__APPLE__)
-    video.nv_legacy.preset = video.nv.quality_preset + 11;
+    video.nv_legacy.preset = nv::ffmpeg_preset_from_quality(video.nv.quality_preset);
     video.nv_legacy.multipass = video.nv.two_pass == nvenc::nvenc_two_pass::quarter_resolution ? NV_ENC_TWO_PASS_QUARTER_RESOLUTION :
                                 video.nv.two_pass == nvenc::nvenc_two_pass::full_resolution    ? NV_ENC_TWO_PASS_FULL_RESOLUTION :
                                                                                                  NV_ENC_MULTI_PASS_DISABLED;
     video.nv_legacy.h264_coder = video.nv.h264_cavlc ? NV_ENC_H264_ENTROPY_CODING_MODE_CAVLC : NV_ENC_H264_ENTROPY_CODING_MODE_CABAC;
-    video.nv_legacy.aq = video.nv.adaptive_quantization;
+    video.nv_legacy.spatial_aq = video.nv.adaptive_quantization;
     video.nv_legacy.vbv_percentage_increase = video.nv.vbv_percentage_increase;
 #endif
 
@@ -1169,15 +1784,44 @@ namespace config {
     bool_f(vars, "amd_preanalysis", (bool &) video.amd.amd_preanalysis);
     bool_f(vars, "amd_vbaq", (bool &) video.amd.amd_vbaq);
     bool_f(vars, "amd_enforce_hrd", (bool &) video.amd.amd_enforce_hrd);
+    {
+      auto max_au_size = video.amd.amd_max_au_size;
+      int_f(vars, "amd_max_au_size", max_au_size);
+      if (!max_au_size || *max_au_size >= -1) {
+        video.amd.amd_max_au_size = max_au_size;
+      }
+    }
 
     int_f(vars, "vt_coder", video.vt.vt_coder, vt::coder_from_view);
-    int_f(vars, "vt_software", video.vt.vt_allow_sw, vt::allow_software_from_view);
-    int_f(vars, "vt_software", video.vt.vt_require_sw, vt::force_software_from_view);
     int_f(vars, "vt_realtime", video.vt.vt_realtime, vt::rt_from_view);
 
+    std::string vaapi_quality;
+    string_f(vars, "vaapi_quality", vaapi_quality);
+    if (!vaapi_quality.empty()) {
+      video.vaapi.vaapi_quality = vaapi::quality_from_view<vaapi::quality_e>(vaapi_quality, video.vaapi.vaapi_quality);
+    }
+    string_f(vars, "vaapi_rc", video.vaapi.vaapi_rc_str);
+    if (!video.vaapi.vaapi_rc_str.empty()) {
+      video.vaapi.vaapi_rc = vaapi::rc_from_view<vaapi::rc_e>(video.vaapi.vaapi_rc_str, video.vaapi.vaapi_rc);
+    }
+    bool_f(vars, "vaapi_blbrc", (bool &) video.vaapi.blbrc);
     bool_f(vars, "vaapi_strict_rc_buffer", video.vaapi.strict_rc_buffer);
 
+    int_f(vars, "vk_tune", video.vk.tune);
+    int_f(vars, "vk_rc_mode", video.vk.rc_mode);
+    std::string vk_quality;
+    string_f(vars, "vk_quality", vk_quality);
+    static const std::unordered_map<std::string_view, int> vk_quality_map = {
+      {"speed"sv, 1},
+      {"balanced"sv, 2},
+      {"quality"sv, 3}
+    };
+    if (auto it = vk_quality_map.find(vk_quality); it != vk_quality_map.end()) {
+      video.vk.quality = it->second;
+    }
+
     string_f(vars, "capture", video.capture);
+    bool_f(vars, "fp16_sdr_gamma_encoded", video.fp16_sdr_gamma_encoded);
     string_f(vars, "encoder", video.encoder);
     string_f(vars, "adapter_name", video.adapter_name);
     string_f(vars, "output_name", video.output_name);
@@ -1231,8 +1875,34 @@ namespace config {
     bool_f(vars, "install_steam_audio_drivers", audio.install_steam_drivers);
     bool_f(vars, "keep_sink_default", audio.keep_default);
     bool_f(vars, "auto_capture_sink", audio.auto_capture);
+    bool_f(vars, "external_audio", audio.external_audio);
 
     string_restricted_f(vars, "origin_web_ui_allowed", nvhttp.origin_web_ui_allowed, {"pc"sv, "lan"sv, "wan"sv});
+
+    // Parse CSRF allowed origins - always include defaults, then append user-configured origins
+    std::vector<std::string> user_csrf_origins;
+    string_list_f(vars, "csrf_allowed_origins", user_csrf_origins);
+
+    // Start with default localhost variants
+    sunshine.csrf_allowed_origins = {
+      "https://localhost",
+      "https://127.0.0.1",
+      "https://[::1]"
+    };
+
+    // Validate and append user-configured origins
+    bool csrf_invalid_config = false;
+    for (const auto &origin : user_csrf_origins) {
+      if (origin.size() > 8 && origin.starts_with("https://")) {
+        sunshine.csrf_allowed_origins.push_back(origin);
+      } else {
+        csrf_invalid_config = true;
+        BOOST_LOG(warning) << "Invalid 'csrf_allowed_origins' entry rejected: "sv << origin;
+      }
+    }
+    if (csrf_invalid_config) {
+      BOOST_LOG(warning) << "Please refer to: https://docs.lizardbyte.dev/projects/sunshine/latest/md_docs_2configuration.html#csrf_allowed_origins"sv;
+    }
 
     int to = -1;
     int_between_f(vars, "ping_timeout", to, {-1, std::numeric_limits<int>::max()});
@@ -1242,18 +1912,32 @@ namespace config {
 
     int_between_f(vars, "lan_encryption_mode", stream.lan_encryption_mode, {0, 2});
     int_between_f(vars, "wan_encryption_mode", stream.wan_encryption_mode, {0, 2});
+    int_between_f(vars, "packetsize", stream.packetsize, {0, PACKETSIZE_MAX});
+    bool_f(vars, "dscp_tagging", stream.dscp_tagging);
 
     path_f(vars, "file_apps", stream.file_apps);
-    int_between_f(vars, "fec_percentage", stream.fec_percentage, {1, 255});
+#ifndef __ANDROID__
+    // TODO: Android can possibly support this
+    if (!fs::exists(stream.file_apps.c_str())) {
+      fs::copy_file(SUNSHINE_ASSETS_DIR "/apps.json", stream.file_apps);
+      fs::permissions(
+        stream.file_apps,
+        fs::perms::owner_read | fs::perms::owner_write,
+        fs::perm_options::add
+      );
+    }
+#endif
+
+    int_between_f(vars, "fec_percentage", stream.fec_percentage, {0, 100});
 
     map_int_int_f(vars, "keybindings"s, input.keybindings);
 
     // This config option will only be used by the UI
     // When editing in the config file itself, use "keybindings"
-    bool map_rightalt_to_win = false;
-    bool_f(vars, "key_rightalt_to_key_win", map_rightalt_to_win);
+    input.key_rightalt_to_key_win = false;
+    bool_f(vars, "key_rightalt_to_key_win", input.key_rightalt_to_key_win);
 
-    if (map_rightalt_to_win) {
+    if (input.key_rightalt_to_key_win) {
       input.keybindings.emplace(0xA5, 0x5B);
     }
 
@@ -1277,11 +1961,23 @@ namespace config {
       input.key_repeat_delay = std::chrono::milliseconds {to};
     }
 
+    string_restricted_f(vars, "gamepad_driver", input.gamepad_driver, {
+                                                                        GAMEPAD_DRIVER_ALL,
+                                                                        GAMEPAD_DRIVER_VIRTUALHID,
+                                                                        GAMEPAD_DRIVER_VIGEMBUS,
+                                                                        GAMEPAD_DRIVER_NONE,
+                                                                      });
     string_restricted_f(vars, "gamepad"s, input.gamepad, get_supported_gamepad_options());
+#ifdef _WIN32
+    if (input.gamepad_driver == GAMEPAD_DRIVER_VIGEMBUS && input.gamepad != "auto"sv && input.gamepad != "x360"sv && input.gamepad != "ds4"sv) {
+      BOOST_LOG(warning) << "Gamepad type '"sv << input.gamepad << "' is not supported by ViGEmBus; using automatic selection"sv;
+      input.gamepad = "auto";
+    }
+#endif
     bool_f(vars, "ds4_back_as_touchpad_click", input.ds4_back_as_touchpad_click);
     bool_f(vars, "motion_as_ds4", input.motion_as_ds4);
     bool_f(vars, "touchpad_as_ds4", input.touchpad_as_ds4);
-    bool_f(vars, "ds5_inputtino_randomize_mac", input.ds5_inputtino_randomize_mac);
+    bool_f(vars, "virtualhid_randomize_mac", input.virtualhid_randomize_mac);
 
     bool_f(vars, "mouse", input.mouse);
     bool_f(vars, "keyboard", input.keyboard);
@@ -1292,21 +1988,29 @@ namespace config {
     bool_f(vars, "high_resolution_scrolling", input.high_resolution_scrolling);
     bool_f(vars, "native_pen_touch", input.native_pen_touch);
     bool_f(vars, "enable_input_only_mode", input.enable_input_only_mode);
+    bool_f(vars, "forward_rumble", input.forward_rumble);
 
+    bool_f(vars, "notify_pre_releases", sunshine.notify_pre_releases);
     bool_f(vars, "system_tray", sunshine.system_tray);
     bool_f(vars, "hide_tray_controls", sunshine.hide_tray_controls);
     bool_f(vars, "enable_pairing", sunshine.enable_pairing);
     bool_f(vars, "enable_discovery", sunshine.enable_discovery);
     bool_f(vars, "envvar_compatibility_mode", sunshine.envvar_compatibility_mode);
-    bool_f(vars, "notify_pre_releases", sunshine.notify_pre_releases);
     bool_f(vars, "legacy_ordering", sunshine.legacy_ordering);
-    bool_f(vars, "forward_rumble", input.forward_rumble);
 
     int port = sunshine.port;
     int_between_f(vars, "port"s, port, {1024 + nvhttp::PORT_HTTPS, 65535 - rtsp_stream::RTSP_SETUP_PORT});
     sunshine.port = (std::uint16_t) port;
 
+    // Now that we have the port, add web UI port-specific origins to CSRF allowed list
+    // Web UI runs on port + 1 (PORT_HTTPS offset is 1 for confighttp)
+    const unsigned short web_ui_port = sunshine.port + 1;
+    sunshine.csrf_allowed_origins.push_back(std::format("https://localhost:{}", web_ui_port));
+    sunshine.csrf_allowed_origins.push_back(std::format("https://127.0.0.1:{}", web_ui_port));
+    sunshine.csrf_allowed_origins.push_back(std::format("https://[::1]:{}", web_ui_port));
+
     string_restricted_f(vars, "address_family", sunshine.address_family, {"ipv4"sv, "both"sv});
+    string_f(vars, "bind_address", sunshine.bind_address);
 
     bool upnp = false;
     bool_f(vars, "upnp"s, upnp);
@@ -1384,8 +2088,22 @@ namespace config {
     ::video::active_av1_mode = video.av1_mode;
   }
 
+#ifdef SUNSHINE_TESTS
+  /**
+   * @brief Parse and apply serialized configuration text for unit tests.
+   *
+   * @param file_content Raw configuration text to parse and apply.
+   */
+  void apply_config_for_test(const std::string_view file_content) {
+    apply_config(parse_config(file_content));
+  }
+#endif
+
+  /**
+   * @brief Parse serialized text into the corresponding runtime representation.
+   */
   int parse(int argc, char *argv[]) {
-    std::unordered_map<std::string, std::string> cmd_vars;
+    config_map_t cmd_vars;
 #ifdef _WIN32
     bool shortcut_launch = false;
     bool service_admin_launch = false;
@@ -1437,7 +2155,7 @@ namespace config {
             cmd_vars.erase(it);
           }
 
-          cmd_vars.emplace(std::move(*var));
+          cmd_vars.try_emplace(std::move(var->first), std::move(var->second));
         }
       }
     }
@@ -1459,7 +2177,7 @@ namespace config {
       auto vars = parse_config(file_handler::read_file(sunshine.config_file.c_str()));
 
       for (auto &[name, value] : cmd_vars) {
-        vars.insert_or_assign(std::move(name), std::move(value));
+        vars.insert_or_assign(name, std::move(value));
       }
 
       // Apply the config. Note: This will try to create any paths
@@ -1502,14 +2220,14 @@ namespace config {
     if (shortcut_launch) {
       if (!service_ctrl::is_service_running()) {
         // If the service isn't running, relaunch ourselves as admin to start it
-        WCHAR executable[MAX_PATH];
-        GetModuleFileNameW(nullptr, executable, ARRAYSIZE(executable));
+        std::array<WCHAR, MAX_PATH> executable;
+        GetModuleFileNameW(nullptr, executable.data(), executable.size());
 
         SHELLEXECUTEINFOW shell_exec_info {};
         shell_exec_info.cbSize = sizeof(shell_exec_info);
         shell_exec_info.fMask = SEE_MASK_NOASYNC | SEE_MASK_NO_CONSOLE | SEE_MASK_NOCLOSEPROCESS;
         shell_exec_info.lpVerb = L"runas";
-        shell_exec_info.lpFile = executable;
+        shell_exec_info.lpFile = executable.data();
         shell_exec_info.lpParameters = L"--shortcut-admin";
         shell_exec_info.nShow = SW_NORMAL;
         if (!ShellExecuteExW(&shell_exec_info)) {
@@ -1525,9 +2243,6 @@ namespace config {
         // Wait for the UI to be ready for connections
         service_ctrl::wait_for_ui_ready();
       }
-
-      // Launch the web UI
-      launch_ui();
 
       // Always return 1 to ensure Sunshine doesn't start normally
       return 1;

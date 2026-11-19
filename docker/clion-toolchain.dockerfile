@@ -1,8 +1,4 @@
 # syntax=docker/dockerfile:1
-# artifacts: false
-# platforms: linux/amd64
-# platforms_pr: linux/amd64
-# no-cache-filters: toolchain-base,toolchain
 ARG BASE=debian
 ARG TAG=trixie-slim
 FROM ${BASE}:${TAG} AS toolchain-base
@@ -25,22 +21,20 @@ set -e
 apt-get update -y
 apt-get install -y --no-install-recommends \
   build-essential \
-  cmake=3.31.* \
   ca-certificates \
+  cmake=3.31.* \
   doxygen \
-  gcc=4:14.2.* \
   g++=4:14.2.* \
+  gcc=4:14.2.* \
   gdb \
   git \
   graphviz \
-  libayatana-appindicator3-dev \
   libcap-dev \
   libcurl4-openssl-dev \
   libdrm-dev \
   libevdev-dev \
   libgbm-dev \
   libminiupnpc-dev \
-  libnotify-dev \
   libnuma-dev \
   libopus-dev \
   libpulse-dev \
@@ -55,6 +49,8 @@ apt-get install -y --no-install-recommends \
   libxrandr-dev \
   libxtst-dev \
   npm \
+  qt6-base-dev \
+  qt6-svg-dev \
   udev \
   wget \
   x11-xserver-utils \
@@ -73,13 +69,13 @@ RUN <<_INSTALL_CUDA
 set -e
 cuda_prefix="https://developer.download.nvidia.com/compute/cuda/"
 cuda_suffix=""
-if [[ "${TARGETPLATFORM}" == 'linux/arm64' ]]; then
+if [ "${TARGETPLATFORM}" = 'linux/arm64' ]; then
   cuda_suffix="_sbsa"
 fi
 url="${cuda_prefix}${CUDA_VERSION}/local_installers/cuda_${CUDA_VERSION}_${CUDA_BUILD}_linux${cuda_suffix}.run"
 echo "cuda url: ${url}"
 tmpfile="/tmp/cuda.run"
-wget "$url" --progress=bar:force:noscroll --show-progress -O "$tmpfile"
+wget "$url" --max-redirect=0 --progress=bar:force:noscroll --show-progress -O "$tmpfile"
 chmod a+x "${tmpfile}"
 "${tmpfile}" --silent --toolkit --toolkitpath=/usr/local --no-opengl-libs --no-man-page --no-drm
 rm -f "${tmpfile}"

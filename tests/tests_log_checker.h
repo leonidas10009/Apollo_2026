@@ -4,11 +4,15 @@
  */
 #pragma once
 
+// standard includes
 #include <algorithm>
 #include <fstream>
 #include <regex>
-#include <src/logging.h>
 #include <string>
+#include <string_view>
+
+// local includes
+#include <src/logging.h>
 
 namespace log_checker {
 
@@ -61,8 +65,7 @@ namespace log_checker {
 
     for (std::string line; std::getline(input, line);) {
       line = remove_timestamp_prefix(line);
-      if (line.size() >= end_str.size() &&
-          line.compare(line.size() - end_str.size(), end_str.size(), end_str) == 0) {
+      if (line.size() >= end_str.size() && line.compare(line.size() - end_str.size(), end_str.size(), end_str) == 0) {
         return true;
       }
     }
@@ -93,7 +96,7 @@ namespace log_checker {
   }
 
   /**
-   * @brief Check if a log file contains a line that contains the given substring.
+   * @brief Check whether any log line contains the substring, including an empty substring.
    * @param log_file Path to the log file.
    * @param substr The substring to search for.
    * @param case_insensitive Whether the search should be case-insensitive.
@@ -119,7 +122,7 @@ namespace log_checker {
         // sonarcloud complains about this, but the solution doesn't work for macOS-12
         std::transform(line.begin(), line.end(), line.begin(), ::tolower);
       }
-      if (line.find(search_str) != std::string::npos) {
+      if (line.contains(search_str)) {
         return true;
       }
     }

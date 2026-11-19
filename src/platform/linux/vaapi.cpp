@@ -3,6 +3,8 @@
  * @brief Definitions for VA-API hardware accelerated capture.
  */
 // standard includes
+#include <array>
+#include <cstddef>
 #include <fcntl.h>
 #include <format>
 #include <sstream>
@@ -13,17 +15,7 @@ extern "C" {
 #include <libavutil/pixdesc.h>
 #include <va/va.h>
 #include <va/va_drm.h>
-#if !VA_CHECK_VERSION(1, 9, 0)
-  // vaSyncBuffer stub allows Sunshine built against libva <2.9.0 to link against ffmpeg on libva 2.9.0 or later
-  VAStatus
-    vaSyncBuffer(
-      VADisplay dpy,
-      VABufferID buf_id,
-      uint64_t timeout_ns
-    ) {
-    return VA_STATUS_ERROR_UNIMPLEMENTED;
-  }
-#endif
+#include <va/va_drmcommon.h>
 }
 
 // local includes
@@ -40,63 +32,114 @@ using namespace std::literals;
 extern "C" struct AVBufferRef;
 
 namespace va {
-  constexpr auto SURFACE_ATTRIB_MEM_TYPE_DRM_PRIME_2 = 0x40000000;
-  constexpr auto EXPORT_SURFACE_WRITE_ONLY = 0x0002;
-  constexpr auto EXPORT_SURFACE_SEPARATE_LAYERS = 0x0004;
+  constexpr auto SURFACE_ATTRIB_MEM_TYPE_DRM_PRIME_2 = 0x40000000;  ///< Protocol or platform constant for surface attrib mem type drm prime 2.
+  constexpr auto EXPORT_SURFACE_WRITE_ONLY = 0x0002;  ///< GameStream port offset for export surface write only.
+  constexpr auto EXPORT_SURFACE_SEPARATE_LAYERS = 0x0004;  ///< GameStream port offset for export surface separate layers.
 
-  using VADisplay = void *;
+  /**
+   * @brief Native VA display handle.
+   */
+  using VADisplay = void *;  // NOSONAR(cpp:S5008): The libva ABI defines VADisplay as a void pointer.
+  /**
+   * @brief Status code returned by VAAPI functions.
+   */
   using VAStatus = int;
+  /**
+   * @brief Generic numeric VAAPI object identifier.
+   */
   using VAGenericID = unsigned int;
+  /**
+   * @brief VAAPI surface identifier.
+   */
   using VASurfaceID = VAGenericID;
 
+  /**
+   * @brief DRM PRIME descriptor imported from a VAAPI surface.
+   */
   struct DRMPRIMESurfaceDescriptor {
     // VA Pixel format fourcc of the whole surface (VA_FOURCC_*).
-    uint32_t fourcc;
+    uint32_t fourcc;  ///< VA fourcc pixel format for the imported surface.
 
-    uint32_t width;
-    uint32_t height;
+    uint32_t width;  ///< Surface width in pixels.
+    uint32_t height;  ///< Surface height in pixels.
 
     // Number of distinct DRM objects making up the surface.
-    uint32_t num_objects;
+    uint32_t num_objects;  ///< Num objects.
 
-    struct {
+    /**
+     * @brief Backing DRM PRIME object with its file descriptor and layout.
+     */
+    struct object_t {
       // DRM PRIME file descriptor for this object.
       // Needs to be closed manually
-      int fd;
+      int fd;  ///< DRM PRIME file descriptor for this object; the owner must close it.
 
       // Total size of this object (may include regions which are not part of the surface)
-      uint32_t size;
+      uint32_t size;  ///< Total byte size of the DRM object.
       // Format modifier applied to this object, not sure what that means
-      uint64_t drm_format_modifier;
-    } objects[4];
+      uint64_t drm_format_modifier;  ///< DRM format modifier applied to this object.
+    };
+
+    std::array<object_t, 4> objects;  ///< DRM PRIME backing objects referenced by the descriptor.
 
     // Number of layers making up the surface.
-    uint32_t num_layers;
+    uint32_t num_layers;  ///< Num layers.
 
-    struct {
+    /**
+     * @brief DRM layer describing the planes of an exported surface.
+     */
+    struct layer_t {
       // DRM format fourcc of this layer (DRM_FOURCC_*).
-      uint32_t drm_format;
+      uint32_t drm_format;  ///< DRM fourcc pixel format for this layer.
 
       // Number of planes in this layer.
-      uint32_t num_planes;
+      uint32_t num_planes;  ///< Number of image planes in this layer.
 
       // references objects --> DRMPRIMESurfaceDescriptor.objects[object_index[0]]
-      uint32_t object_index[4];
+      std::array<uint32_t, 4> object_index;  ///< Index of the backing DRM object for each plane.
 
       // Offset within the object of each plane.
-      uint32_t offset[4];
+      std::array<uint32_t, 4> offset;  ///< Byte offset of each plane within its backing object.
 
       // Pitch of each plane.
-      uint32_t pitch[4];
-    } layers[4];
+      std::array<uint32_t, 4> pitch;  ///< Row pitch in bytes for each plane.
+    };
+
+    std::array<layer_t, 4> layers;  ///< DRM PRIME layer descriptions for the frame.
   };
 
-  using display_t = util::safe_ptr_v2<void, VAStatus, vaTerminate>;
+  static_assert(sizeof(DRMPRIMESurfaceDescriptor) == sizeof(VADRMPRIMESurfaceDescriptor));
+  static_assert(alignof(DRMPRIMESurfaceDescriptor) == alignof(VADRMPRIMESurfaceDescriptor));
+  static_assert(offsetof(DRMPRIMESurfaceDescriptor, objects) == offsetof(VADRMPRIMESurfaceDescriptor, objects));
+  static_assert(offsetof(DRMPRIMESurfaceDescriptor, layers) == offsetof(VADRMPRIMESurfaceDescriptor, layers));
 
+  /**
+   * @brief VA display handle released with `vaTerminate`.
+   */
+  using display_t = util::safe_ptr_v2<void, VAStatus, &vaTerminate>;
+
+  /**
+   * @brief Create an FFmpeg VA-API hardware device context from a Sunshine encode device.
+   *
+   * @param encode_device Encode device.
+   * @param hw_device_buf Output FFmpeg hardware device buffer.
+   * @return 0 when the buffer is initialized; negative FFmpeg error code on failure.
+   */
   int vaapi_init_avcodec_hardware_input_buffer(platf::avcodec_encode_device_t *encode_device, AVBufferRef **hw_device_buf);
 
+  /**
+   * @brief VAAPI encode device that imports captured frames into VA surfaces.
+   */
   class va_t: public platf::avcodec_encode_device_t {
   public:
+    /**
+     * @brief Initialize VAAPI display, EGL, and conversion resources.
+     *
+     * @param in_width In width.
+     * @param in_height In height.
+     * @param render_device Render device.
+     * @return 0 on success; nonzero or negative platform status on failure.
+     */
     int init(int in_width, int in_height, file_t &&render_device) {
       file = std::move(render_device);
 
@@ -105,12 +148,13 @@ namespace va {
         return -1;
       }
 
-      this->data = (void *) vaapi_init_avcodec_hardware_input_buffer;
+      hardware = true;
+      init_hw_device = &vaapi_init_avcodec_hardware_input_buffer;
 
       gbm.reset(gbm::create_device(file.el));
       if (!gbm) {
-        char string[1024];
-        BOOST_LOG(error) << "Couldn't create GBM device: ["sv << strerror_r(errno, string, sizeof(string)) << ']';
+        std::array<char, 1024> string;
+        BOOST_LOG(error) << "Couldn't create GBM device: ["sv << strerror_r(errno, string.data(), string.size()) << ']';
         return -1;
       }
 
@@ -148,7 +192,7 @@ namespace va {
       entrypoints.resize(num_eps);
 
       // Sorted in order of descending preference
-      VAEntrypoint ep_preferences[] = {
+      std::array<VAEntrypoint, 3> ep_preferences = {
         VAEntrypointEncSliceLP,
         VAEntrypointEncSlice,
         VAEntrypointEncPicture
@@ -182,17 +226,17 @@ namespace va {
 
     /**
      * @brief Determines the matching VA profile for the codec configuration.
-     * @param ctx The FFmpeg codec context.
+     * @param codec_ctx The FFmpeg codec context.
      * @return The matching VA profile or `VAProfileNone` on failure.
      */
-    VAProfile get_va_profile(AVCodecContext *ctx) {
-      if (ctx->codec_id == AV_CODEC_ID_H264) {
+    VAProfile get_va_profile(AVCodecContext *codec_ctx) {
+      if (codec_ctx->codec_id == AV_CODEC_ID_H264) {
         // There's no VAAPI profile for H.264 4:4:4
         return VAProfileH264High;
-      } else if (ctx->codec_id == AV_CODEC_ID_HEVC) {
-        switch (ctx->profile) {
+      } else if (codec_ctx->codec_id == AV_CODEC_ID_HEVC) {
+        switch (codec_ctx->profile) {
           case AV_PROFILE_HEVC_REXT:
-            switch (av_pix_fmt_desc_get(ctx->sw_pix_fmt)->comp[0].depth) {
+            switch (av_pix_fmt_desc_get(codec_ctx->sw_pix_fmt)->comp[0].depth) {
               case 10:
                 return VAProfileHEVCMain444_10;
               case 8:
@@ -204,8 +248,8 @@ namespace va {
           case AV_PROFILE_HEVC_MAIN:
             return VAProfileHEVCMain;
         }
-      } else if (ctx->codec_id == AV_CODEC_ID_AV1) {
-        switch (ctx->profile) {
+      } else if (codec_ctx->codec_id == AV_CODEC_ID_AV1) {
+        switch (codec_ctx->profile) {
           case AV_PROFILE_AV1_HIGH:
             return VAProfileAV1Profile1;
           case AV_PROFILE_AV1_MAIN:
@@ -213,12 +257,18 @@ namespace va {
         }
       }
 
-      BOOST_LOG(error) << "Unknown encoder profile: "sv << ctx->profile;
+      BOOST_LOG(error) << "Unknown encoder profile: "sv << codec_ctx->profile;
       return VAProfileNone;
     }
 
-    void init_codec_options(AVCodecContext *ctx, AVDictionary **options) override {
-      auto va_profile = get_va_profile(ctx);
+    /**
+     * @brief Initialize codec options.
+     *
+     * @param codec_ctx Native context object used by the operation or callback.
+     * @param options Request options or socket options to apply.
+     */
+    void init_codec_options(AVCodecContext *codec_ctx, AVDictionary **options) override {
+      auto va_profile = get_va_profile(codec_ctx);
       if (va_profile == VAProfileNone || !is_va_profile_supported(va_profile)) {
         // Don't bother doing anything if the profile isn't supported
         return;
@@ -239,22 +289,51 @@ namespace va {
         BOOST_LOG(info) << "Using normal encoding mode"sv;
       }
 
-      VAConfigAttrib rc_attr = {VAConfigAttribRateControl};
-      auto status = vaGetConfigAttributes(va_display, va_profile, va_entrypoint, &rc_attr, 1);
+      // When the compression_level AVOption is set, vaapi_encode.c assigns the value to VAEncMiscParameterBufferQualityLevel
+      VAConfigAttrib quality_attr = {.type = VAConfigAttribEncQualityRange};
+      auto status = vaGetConfigAttributes(va_display, va_profile, va_entrypoint, &quality_attr, 1);
+      if (status != VA_STATUS_SUCCESS || quality_attr.value == VA_ATTRIB_NOT_SUPPORTED) {
+        quality_attr.value = 0;
+      }
+      auto vaapi_quality = config::video.vaapi.vaapi_quality.value_or(0);
+      auto target_quality = 0;
+      switch (vaapi_quality) {
+        default:
+        case 0:  // auto or unset
+          break;
+        case 1:  // low quality (highest value in range)
+          target_quality = quality_attr.value;
+          break;
+        case 2:  // med quality (middle value in range)
+          // Calculate the true midpoint between 1 and max quality range.
+          // For an odd max like 7, (1 + 7) / 2 = 4. For even like 6, (1 + 6) / 2 = 3.
+          target_quality = (1 + quality_attr.value) / 2;
+          break;
+        case 3:  // high quality (1)
+          target_quality = 1;
+          break;
+      }
+      if (target_quality > 0) {
+        codec_ctx->compression_level = target_quality;
+        BOOST_LOG(info) << "[VAAPI] Quality level set to "sv << codec_ctx->compression_level << " (fastest level: "sv << quality_attr.value << ")"sv;
+      }
+
+      VAConfigAttrib rc_attr = {.type = VAConfigAttribRateControl};
+      status = vaGetConfigAttributes(va_display, va_profile, va_entrypoint, &rc_attr, 1);
       if (status != VA_STATUS_SUCCESS) {
         // Stick to the default rate control (CQP)
         rc_attr.value = 0;
       }
 
-      VAConfigAttrib slice_attr = {VAConfigAttribEncMaxSlices};
+      VAConfigAttrib slice_attr = {.type = VAConfigAttribEncMaxSlices};
       status = vaGetConfigAttributes(va_display, va_profile, va_entrypoint, &slice_attr, 1);
       if (status != VA_STATUS_SUCCESS) {
         // Assume only a single slice is supported
         slice_attr.value = 1;
       }
-      if (ctx->slices > slice_attr.value) {
+      if (codec_ctx->slices > slice_attr.value) {
         BOOST_LOG(info) << "Limiting slice count to encoder maximum: "sv << slice_attr.value;
-        ctx->slices = slice_attr.value;
+        codec_ctx->slices = slice_attr.value;
       }
 
       // Use VBR with a single frame VBV when the user forces it and for known good cases:
@@ -268,51 +347,74 @@ namespace va {
       // When we have to resort to the default 1 second VBV for encoding quality reasons,
       // we stick to CBR in order to avoid encoding huge frames after bitrate undershoots
       // leave headroom available in the RC window.
-      if (config::video.vaapi.strict_rc_buffer ||
-          (vendor && strstr(vendor, "Intel")) ||
-          ctx->codec_id == AV_CODEC_ID_AV1) {
-        ctx->rc_buffer_size = ctx->bit_rate * ctx->framerate.den / ctx->framerate.num;
+      //
+      // If a user-supplied rate control is detected, override the whitelist logic to allow
+      // full user control of both the rate control and strict VBV settings.
+      auto auto_whitelist = false;
+      auto rc_mode = config::video.vaapi.vaapi_rc_str;
+      auto rc_vbv = "with standard VBV size";
+      auto rc_whitelist = "";
+      auto rc_val = config::video.vaapi.vaapi_rc.value_or(0);
 
-        if (rc_attr.value & VA_RC_VBR) {
-          BOOST_LOG(info) << "Using VBR with single frame VBV size"sv;
-          av_dict_set(options, "rc_mode", "VBR", 0);
-        } else if (rc_attr.value & VA_RC_CBR) {
-          BOOST_LOG(info) << "Using CBR with single frame VBV size"sv;
-          av_dict_set(options, "rc_mode", "CBR", 0);
-        } else {
-          BOOST_LOG(warning) << "Using CQP with single frame VBV size"sv;
-          av_dict_set_int(options, "qp", config::video.qp, 0);
-        }
-      } else if (!(rc_attr.value & (VA_RC_CBR | VA_RC_VBR))) {
-        BOOST_LOG(warning) << "Using CQP rate control"sv;
-        av_dict_set_int(options, "qp", config::video.qp, 0);
-      } else {
-        // For remaining VAAPI encoders (typically AMD H.264/HEVC), explicitly
-        // select a rate control mode. The VBV buffer size is already set by
-        // the common encoder code in video.cpp.
-        if (rc_attr.value & VA_RC_CBR) {
-          BOOST_LOG(info) << "Using CBR rate control"sv;
-          av_dict_set(options, "rc_mode", "CBR", 0);
-        } else if (rc_attr.value & VA_RC_VBR) {
-          BOOST_LOG(info) << "Using VBR rate control"sv;
-          av_dict_set(options, "rc_mode", "VBR", 0);
-        }
+      // Detect whitelisted configurations
+      if ((vendor && std::string_view(vendor).contains("Intel") == true) || codec_ctx->codec_id == AV_CODEC_ID_AV1) {
+        auto_whitelist = true;
+        rc_whitelist = " (whitelist override)";
       }
+
+      // First try user config, else fall back to auto-detection that respects whitelist
+      if (rc_val > 0 && rc_attr.value & rc_val) {
+        // override whitelist if the user-specified RC is supported
+        auto_whitelist = false;
+        rc_whitelist = "";
+      } else if (rc_attr.value & VA_RC_VBR && auto_whitelist) {
+        rc_mode = "vbr";
+        rc_val = VA_RC_VBR;
+      } else if (rc_attr.value & VA_RC_CBR) {
+        rc_mode = "cbr";
+        rc_val = VA_RC_CBR;
+      } else {
+        rc_mode = "cqp";
+        rc_val = VA_RC_CQP;
+      }
+
+      if (config::video.vaapi.strict_rc_buffer || auto_whitelist) {
+        codec_ctx->rc_buffer_size = codec_ctx->bit_rate * codec_ctx->framerate.den / codec_ctx->framerate.num;
+        rc_vbv = "with single frame VBV size";
+      }
+
+      // ffmpeg's rc_mode values don't align with VAAPI's rc_val values, so transform string to uppercase
+      std::transform(rc_mode.begin(), rc_mode.end(), rc_mode.begin(), [](unsigned char c) {
+        return std::toupper(c);
+      });
+      av_dict_set(options, "rc_mode", rc_mode.c_str(), 0);
+      if (rc_val == VA_RC_CQP || rc_val == VA_RC_ICQ || rc_val == VA_RC_QVBR) {
+        BOOST_LOG(warning) << "[VAAPI] Applying QP for compatible rate control method (QP value: "sv << config::video.qp << ")"sv;
+        av_dict_set_int(options, "qp", config::video.qp, 0);
+      }
+      BOOST_LOG(info) << "[VAAPI] Using "sv << rc_mode << " rate control "sv << rc_vbv << rc_whitelist;
     }
 
-    int set_frame(AVFrame *frame, AVBufferRef *hw_frames_ctx_buf) override {
-      this->hwframe.reset(frame);
-      this->frame = frame;
+    /**
+     * @brief Attach frame resources used by the next conversion or encode operation.
+     *
+     * @param new_frame Video or graphics frame being processed.
+     * @param hw_frames_ctx_buf Hardware frames context buffer.
+     * @return Status from updating frame.
+     */
+    int set_frame(AVFrame *new_frame, AVBufferRef *hw_frames_ctx_buf) override {
+      this->hwframe.reset(new_frame);
+      this->frame = new_frame;
 
-      if (!frame->buf[0]) {
-        if (av_hwframe_get_buffer(hw_frames_ctx_buf, frame, 0)) {
+      if (!new_frame->buf[0]) {
+        if (av_hwframe_get_buffer(hw_frames_ctx_buf, new_frame, 0)) {
           BOOST_LOG(error) << "Couldn't get hwframe for VAAPI"sv;
           return -1;
         }
       }
 
       va::DRMPRIMESurfaceDescriptor prime;
-      va::VASurfaceID surface = (std::uintptr_t) frame->data[3];
+      va::VASurfaceID surface = (std::uintptr_t) new_frame->data[3];
       auto hw_frames_ctx = (AVHWFramesContext *) hw_frames_ctx_buf->data;
 
       auto status = vaExportSurfaceHandle(
@@ -339,7 +441,7 @@ namespace va {
         return -1;
       }
 
-      egl::surface_descriptor_t sds[2] = {};
+      std::array<egl::surface_descriptor_t, 2> sds = {};
       for (int plane = 0; plane < 2; ++plane) {
         auto &sd = sds[plane];
         auto &layer = prime.layers[plane];
@@ -353,7 +455,7 @@ namespace va {
         // The modifier must be the same for all planes
         sd.modifier = prime.objects[layer.object_index[0]].drm_format_modifier;
 
-        std::fill_n(sd.fds, 4, -1);
+        sd.fds.fill(-1);
         for (int x = 0; x < layer.num_planes; ++x) {
           sd.fds[x] = prime.objects[layer.object_index[x]].fd;
           sd.pitches[x] = layer.pitch[x];
@@ -366,7 +468,7 @@ namespace va {
         return -1;
       }
 
-      auto sws_opt = egl::sws_t::make(width, height, frame->width, frame->height, hw_frames_ctx->sw_format);
+      auto sws_opt = egl::sws_t::make(width, height, new_frame->width, new_frame->height, hw_frames_ctx->sw_format, false);
       if (!sws_opt) {
         return -1;
       }
@@ -377,39 +479,61 @@ namespace va {
       return 0;
     }
 
+    /**
+     * @brief Apply the configured colorspace metadata to the active frame.
+     */
     void apply_colorspace() override {
-      sws.apply_colorspace(colorspace);
+      sws.apply_colorspace(colorspace, false);
     }
 
-    va::display_t::pointer va_display;
-    file_t file;
+    va::display_t::pointer va_display;  ///< VA display used to allocate and destroy surfaces.
+    file_t file;  ///< DRM render-node file descriptor used by VAAPI and EGL.
 
-    gbm::gbm_t gbm;
-    egl::display_t display;
-    egl::ctx_t ctx;
+    gbm::gbm_t gbm;  ///< GBM device used for buffer allocation.
+    egl::display_t display;  ///< EGL display created from the DRM render node.
+    egl::ctx_t ctx;  ///< EGL context used for VA-API frame conversion.
 
     // This must be destroyed before display_t to ensure the GPU
     // driver is still loaded when vaDestroySurfaces() is called.
-    frame_t hwframe;
+    frame_t hwframe;  ///< FFmpeg hardware frame backed by a VAAPI surface.
 
-    egl::sws_t sws;
-    egl::nv12_t nv12;
+    egl::sws_t sws;  ///< EGL/OpenGL conversion pipeline for VA-API frames.
+    egl::nv12_t nv12;  ///< EGL/OpenGL resources used for NV12 output frames.
 
-    int width, height;
+    int width;  ///< Frame or display width in pixels.
+    int height;  ///< Frame or display height in pixels.
   };
 
+  /**
+   * @brief VAAPI encode path that copies converted frames through system memory.
+   */
   class va_ram_t: public va_t {
   public:
+    /**
+     * @brief Convert a captured VAAPI frame into system-memory encoder input.
+     *
+     * @param img Image or frame object to read from or populate.
+     * @return Conversion status.
+     */
     int convert(platf::img_t &img) override {
       sws.load_ram(img);
 
-      sws.convert(nv12->buf);
+      sws.convert_nv12(nv12->buf);
       return 0;
     }
   };
 
+  /**
+   * @brief VAAPI encode path that keeps converted frames in GPU memory.
+   */
   class va_vram_t: public va_t {
   public:
+    /**
+     * @brief Convert a captured VAAPI frame into GPU encoder input.
+     *
+     * @param img Image or frame object to read from or populate.
+     * @return Conversion status.
+     */
     int convert(platf::img_t &img) override {
       auto &descriptor = (egl::img_descriptor_t &) img;
 
@@ -430,52 +554,62 @@ namespace va {
         rgb = std::move(*rgb_opt);
       }
 
-      sws.load_vram(descriptor, offset_x, offset_y, rgb->tex[0]);
+      sws.load_vram(descriptor, offset_x, offset_y, rgb->tex[0], false);
 
-      sws.convert(nv12->buf);
+      sws.convert_nv12(nv12->buf);
       return 0;
     }
 
-    int init(int in_width, int in_height, file_t &&render_device, int offset_x, int offset_y) {
+    /**
+     * @brief Initialize VAAPI GPU-frame conversion for the selected display.
+     *
+     * @param in_width In width.
+     * @param in_height In height.
+     * @param render_device Render device.
+     * @param in_offset_x Offset x.
+     * @param in_offset_y Offset y.
+     * @return 0 on success; nonzero or negative platform status on failure.
+     */
+    int init(int in_width, int in_height, file_t &&render_device, int in_offset_x, int in_offset_y) {
       if (va_t::init(in_width, in_height, std::move(render_device))) {
         return -1;
       }
 
       sequence = 0;
 
-      this->offset_x = offset_x;
-      this->offset_y = offset_y;
+      this->offset_x = in_offset_x;
+      this->offset_y = in_offset_y;
 
       return 0;
     }
 
-    std::uint64_t sequence;
-    egl::rgb_t rgb;
+    std::uint64_t sequence;  ///< Monotonic sequence used to recreate imported EGL resources.
+    egl::rgb_t rgb;  ///< Imported RGB image used before VAAPI conversion.
 
-    int offset_x, offset_y;
+    int offset_x;  ///< Horizontal offset in physical pixels.
+    int offset_y;  ///< Vertical offset in physical pixels.
   };
 
   /**
-   * This is a private structure of FFmpeg, I need this to manually create
-   * a VAAPI hardware context
+   * @brief FFmpeg-private device data used to create a VA-API hardware context.
    *
-   * xdisplay will not be used internally by FFmpeg
+   * The X11 display pointer is not used internally by FFmpeg.
    */
-  typedef struct VAAPIDevicePriv {
+  struct VAAPIDevicePriv {
     union {
-      void *xdisplay;
-      int fd;
-    } drm;
+      void *xdisplay;  ///< Native X11 display handle for display-backed contexts.
+      int fd;  ///< DRM file descriptor for device-backed contexts.
+    } drm;  ///< Native display or DRM fd passed to FFmpeg's VA-API context.
 
-    int drm_fd;
-  } VAAPIDevicePriv;
+    int drm_fd;  ///< DRM fd.
+  };
 
   /**
-   * VAAPI connection details.
+   * @brief VA-API connection details allocated as AVHWDeviceContext.hwctx.
    *
-   * Allocated as AVHWDeviceContext.hwctx
+   * The layout must match the corresponding FFmpeg hardware context.
    */
-  typedef struct AVVAAPIDeviceContext {
+  struct AVVAAPIDeviceContext {
     /**
      * The VADisplay handle, to be filled by the user.
      */
@@ -488,7 +622,7 @@ namespace va {
      * operations using VAAPI with the same VADisplay.
      */
     unsigned int driver_quirks;
-  } AVVAAPIDeviceContext;
+  };
 
   static void __log(void *level, const char *msg) {
     BOOST_LOG(*(boost::log::sources::severity_logger<int> *) level) << msg;
@@ -503,6 +637,9 @@ namespace va {
     av_freep(&priv);
   }
 
+  /**
+   * @brief Initialize FFmpeg's VA-API hardware device buffer.
+   */
   int vaapi_init_avcodec_hardware_input_buffer(platf::avcodec_encode_device_t *base, AVBufferRef **hw_device_buf) {
     auto va = (va::va_t *) base;
     auto fd = dup(va->file.el);
@@ -517,9 +654,7 @@ namespace va {
 
     va::display_t display {vaGetDisplayDRM(fd)};
     if (!display) {
-      auto render_device = config::video.adapter_name.empty() ? "/dev/dri/renderD128" : config::video.adapter_name.c_str();
-
-      BOOST_LOG(error) << "Couldn't open a va display from DRM with device: "sv << render_device;
+      BOOST_LOG(error) << "Couldn't open a va display from DRM with device: "sv << platf::resolve_render_device();
       return -1;
     }
 
@@ -528,7 +663,8 @@ namespace va {
     vaSetErrorCallback(display.get(), __log, &error);
     vaSetErrorCallback(display.get(), __log, &info);
 
-    int major, minor;
+    int major;
+    int minor;
     auto status = vaInitialize(display.get(), &major, &minor);
     if (status) {
       BOOST_LOG(error) << "Couldn't initialize va display: "sv << vaErrorStr(status);
@@ -549,8 +685,8 @@ namespace va {
 
     auto err = av_hwdevice_ctx_init(*hw_device_buf);
     if (err) {
-      char err_str[AV_ERROR_MAX_STRING_SIZE] {0};
-      BOOST_LOG(error) << "Failed to create FFMpeg hardware device context: "sv << av_make_error_string(err_str, AV_ERROR_MAX_STRING_SIZE, err);
+      std::array<char, AV_ERROR_MAX_STRING_SIZE> err_str {0};
+      BOOST_LOG(error) << "Failed to create FFMpeg hardware device context: "sv << av_make_error_string(err_str.data(), AV_ERROR_MAX_STRING_SIZE, err);
 
       return err;
     }
@@ -579,20 +715,24 @@ namespace va {
     return false;
   }
 
+  /**
+   * @brief Validate that the configured VAAPI device can be used.
+   */
   bool validate(int fd) {
     va::display_t display {vaGetDisplayDRM(fd)};
     if (!display) {
-      char string[1024];
+      std::array<char, 1024> string;
 
-      auto bytes = readlink(std::format("/proc/self/fd/{}", fd).c_str(), string, sizeof(string));
+      auto bytes = readlink(std::format("/proc/self/fd/{}", fd).c_str(), string.data(), string.size());
 
-      std::string_view render_device {string, (std::size_t) bytes};
+      std::string_view render_device {string.data(), (std::size_t) bytes};
 
       BOOST_LOG(error) << "Couldn't open a va display from DRM with device: "sv << render_device;
       return false;
     }
 
-    int major, minor;
+    int major;
+    int minor;
     auto status = vaInitialize(display.get(), &major, &minor);
     if (status) {
       BOOST_LOG(error) << "Couldn't initialize va display: "sv << vaErrorStr(status);
@@ -614,6 +754,9 @@ namespace va {
     return true;
   }
 
+  /**
+   * @brief Create AVCodec encode device.
+   */
   std::unique_ptr<platf::avcodec_encode_device_t> make_avcodec_encode_device(int width, int height, file_t &&card, int offset_x, int offset_y, bool vram) {
     if (vram) {
       auto egl = std::make_unique<va::va_vram_t>();
@@ -634,13 +777,16 @@ namespace va {
     }
   }
 
+  /**
+   * @brief Create AVCodec encode device.
+   */
   std::unique_ptr<platf::avcodec_encode_device_t> make_avcodec_encode_device(int width, int height, int offset_x, int offset_y, bool vram) {
-    auto render_device = config::video.adapter_name.empty() ? "/dev/dri/renderD128" : config::video.adapter_name.c_str();
+    auto render_device = platf::resolve_render_device();
 
-    file_t file = open(render_device, O_RDWR);
+    file_t file = ::open(render_device.c_str(), O_RDWR);  // NOSONAR(cpp:S1874): `_sopen_s` not available
     if (file.el < 0) {
-      char string[1024];
-      BOOST_LOG(error) << "Couldn't open "sv << render_device << ": " << strerror_r(errno, string, sizeof(string));
+      std::array<char, 1024> string;
+      BOOST_LOG(error) << "Couldn't open "sv << render_device << ": " << strerror_r(errno, string.data(), string.size());
 
       return nullptr;
     }

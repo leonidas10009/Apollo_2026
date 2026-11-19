@@ -5,6 +5,10 @@
 #pragma once
 
 #ifndef __kernel_entry
+  /**
+   * @def __kernel_entry
+   * @brief Macro for kernel entry.
+   */
   #define __kernel_entry
 #endif
 
@@ -28,6 +32,7 @@
 #include "config.h"
 #include "platform/common.h"
 #include "rtsp.h"
+#include "src/compat/boost_process.h"
 #include "utility.h"
 
 #ifdef _WIN32
@@ -39,8 +44,14 @@
 #define REMOTE_INPUT_UUID "8CB5C136-DA67-4F99-B4A1-F9CD35005CF4"
 #define TERMINATE_APP_UUID "E16CBE1B-295D-4632-9A76-EC4180C857D3"
 
+/**
+ * @def DEFAULT_APP_IMAGE_PATH
+ * @brief Macro for DEFAULT APP IMAGE PATH.
+ */
+#define DEFAULT_APP_IMAGE_PATH SUNSHINE_ASSETS_DIR "/box.png"
+
 namespace proc {
-  using file_t = util::safe_ptr_v2<FILE, int, fclose>;
+  using file_t = util::safe_ptr_v2<FILE, int, &fclose>;
 
 #ifdef _WIN32
   extern VDISPLAY::DRIVER_STATUS vDisplayDriverStatus;
@@ -61,7 +72,7 @@ namespace proc {
    *    filename -- The output of the commands are appended to filename
    */
   struct ctx_t {
-    std::vector<cmd_t> prep_cmds;
+    std::vector<cmd_t> prep_cmds;  ///< Prep cmds.
     std::vector<cmd_t> state_cmds;
 
     /**
@@ -80,26 +91,29 @@ namespace proc {
 
     std::string idx;
     std::string uuid;
-    std::string name;
-    std::string cmd;
-    std::string working_dir;
-    std::string output;
-    std::string image_path;
-    std::string id;
+    std::string name;  ///< Human-readable name for this item.
+    std::string cmd;  ///< Command line used to launch the application.
+    std::string working_dir;  ///< Working dir.
+    std::string output;  ///< Captured output from the launched process.
+    std::string image_path;  ///< Image path.
+    std::string id;  ///< Stable identifier for the configured application.
     std::string gamepad;
-    bool elevated;
-    bool auto_detach;
-    bool wait_all;
+    bool elevated;  ///< Whether the process should be launched elevated.
+    bool auto_detach;  ///< Whether the process should detach automatically.
+    bool wait_all;  ///< Whether Sunshine waits for all child processes.
     bool virtual_display;
     bool virtual_display_primary;
     bool use_app_identity;
     bool per_client_app_identity;
     bool allow_client_commands;
     bool terminate_on_pause;
-    int  scale_factor;
-    std::chrono::seconds exit_timeout;
+    int scale_factor;
+    std::chrono::seconds exit_timeout;  ///< Exit timeout.
   };
 
+  /**
+   * @brief Tracks launched child processes and terminates them during shutdown.
+   */
   class proc_t {
   public:
     KITTY_DEFAULT_CONSTR_MOVE_THROW(proc_t)
@@ -111,6 +125,12 @@ namespace proc {
     bool virtual_display = false;
     bool allow_client_commands = false;
 
+    /**
+     * @brief Construct a process manager.
+     *
+     * @param env Environment used when launching processes.
+     * @param apps Application launch contexts.
+     */
     proc_t(
       boost::process::v1::environment &&env,
       std::vector<ctx_t> &&apps
@@ -121,7 +141,16 @@ namespace proc {
 
     void launch_input_only();
 
-    int execute(const ctx_t& _app, std::shared_ptr<rtsp_stream::launch_session_t> launch_session);
+    int execute(const ctx_t &_app, std::shared_ptr<rtsp_stream::launch_session_t> launch_session);
+
+    /**
+     * @brief Launch the configured application process.
+     *
+     * @param app_id App ID.
+     * @param launch_session Launch session.
+     * @return Process exit code or launch error status.
+     */
+    int execute(int app_id, std::shared_ptr<rtsp_stream::launch_session_t> launch_session);
 
     /**
      * @return `_app_id` if a process is running, otherwise returns `0`
@@ -130,15 +159,63 @@ namespace proc {
 
     ~proc_t();
 
+    /**
+     * @brief Return the configured applications.
+     *
+     * @return Immutable application list owned by the process manager.
+     */
     const std::vector<ctx_t> &get_apps() const;
+    /**
+     * @brief Return the configured applications.
+     *
+     * @return Mutable application list owned by the process manager.
+     */
     std::vector<ctx_t> &get_apps();
+    /**
+     * @brief Get app image.
+     *
+     * @param app_id App ID.
+     * @return Validated image path for the requested application.
+     */
     std::string get_app_image(int app_id);
+    /**
+     * @brief Get last run app name.
+     *
+     * @return Name of the most recently launched application.
+     */
     std::string get_last_run_app_name();
     std::string get_running_app_uuid();
     boost::process::v1::environment get_env();
     void resume();
     void pause();
+
+    /**
+     * @brief Terminate the launched application process.
+     *
+     * @param immediate Whether to skip graceful shutdown handling.
+     * @param needs_refresh Whether to refresh the cached application list afterwards.
+     */
     void terminate(bool immediate = false, bool needs_refresh = true);
+
+    /**
+     * @brief Update the cached app list and environment without disturbing running process state.
+     *
+     * This replaces only the application configuration data (_apps and _env) from a newly parsed
+     * proc_t, preserving the current _app_id, _process, _process_group, and other fields that
+     * track an in-flight streaming session.
+     *
+     * @param other The newly parsed proc_t whose apps and env will be moved into this instance.
+     */
+    void update_apps_and_env(proc_t &&other);
+
+#ifdef SUNSHINE_TESTS
+    /**
+     * @brief Get the current process environment (strictly for unit tests).
+     */
+    const boost::process::v1::environment &get_env() const {
+      return _env;
+    }
+#endif
 
   private:
     int _app_id = 0;
@@ -165,17 +242,42 @@ namespace proc {
   };
 
   boost::filesystem::path
-  find_working_directory(const std::string &cmd, const boost::process::v1::environment &env);
+  find_working_directory(const std::string &cmd, boost::process::v1::environment &env);
 
   /**
    * @brief Calculate a stable id based on name and image data
    * @return Tuple of id calculated without index (for use if no collision) and one with.
+   *
+   * @param app_name App name.
+   * @param app_image_path App image path.
+   * @param index Zero-based index of the item being addressed.
    */
   std::tuple<std::string, std::string> calculate_app_id(const std::string &app_name, std::string app_image_path, int index);
 
+  /**
+   * @brief Prepare a configured command for execution.
+   *
+   * @param command Configured command line.
+   * @return Command line with any package-specific launcher prefix applied.
+   */
+  std::string prepare_command(const std::string &command);
+
+  bool check_valid_png(const std::filesystem::path &path);
+  /**
+   * @brief Validate app image path.
+   *
+   * @param app_image_path Candidate image path from the application configuration.
+   * @return Existing PNG path, or the default application image when validation fails.
+   */
   std::string validate_app_image_path(std::string app_image_path);
+  /**
+   * @brief Refresh cached platform state from the operating system.
+   *
+   * @param file_name File name.
+   * @param needs_terminate Whether to terminate running applications before refreshing.
+   */
   void refresh(const std::string &file_name, bool needs_terminate = true);
-  void migrate_apps(nlohmann::json* fileTree_p, nlohmann::json* inputTree_p);
+  void migrate_apps(nlohmann::json *fileTree_p, nlohmann::json *inputTree_p);
   std::optional<proc::proc_t> parse(const std::string &file_name);
 
   /**
@@ -186,11 +288,11 @@ namespace proc {
 
   /**
    * @brief Terminates all child processes in a process group.
-   * @param proc The child process itself.
+   * @param child_process The child process itself.
    * @param group The group of all children in the process tree.
    * @param exit_timeout The timeout to wait for the process group to gracefully exit.
    */
-  void terminate_process_group(boost::process::v1::child &proc, boost::process::v1::group &group, std::chrono::seconds exit_timeout);
+  void terminate_process_group(boost::process::v1::child &child_process, boost::process::v1::group &group, std::chrono::seconds exit_timeout);
 
   extern proc_t proc;
 

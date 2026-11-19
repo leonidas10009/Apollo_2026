@@ -3,6 +3,7 @@
  * @brief Definitions for audio capture and encoding.
  */
 // standard includes
+#include <array>
 #include <thread>
 
 // lib includes
@@ -19,26 +20,42 @@
 
 namespace audio {
   using namespace std::literals;
+  /**
+   * @brief Owning pointer for an Opus multistream encoder.
+   */
   using opus_t = util::safe_ptr<OpusMSEncoder, opus_multistream_encoder_destroy>;
+  /**
+   * @brief Shared queue carrying captured PCM sample buffers to the encoder thread.
+   */
   using sample_queue_t = std::shared_ptr<safe::queue_t<std::vector<float>>>;
 
   static int start_audio_control(audio_ctx_t &ctx);
   static void stop_audio_control(audio_ctx_t &);
   static void apply_surround_params(opus_stream_config_t &stream, const stream_params_t &params);
 
+  /**
+   * @brief Select the Opus stream configuration for a channel count and quality tier.
+   *
+   * @param channels Number of audio channels in the stream.
+   * @param quality Whether the high-quality Opus layout should be selected.
+   * @return Index into `stream_configs` for the requested layout.
+   */
   int map_stream(int channels, bool quality);
 
-  constexpr auto SAMPLE_RATE = 48000;
+  constexpr auto SAMPLE_RATE = 48000;  ///< Audio sample rate in hertz required by Opus.
 
   // NOTE: If you adjust the bitrates listed here, make sure to update the
   // corresponding bitrate adjustment logic in rtsp_stream::cmd_announce()
-  opus_stream_config_t stream_configs[MAX_STREAM_CONFIG] {
+  /**
+   * @brief Opus stream layouts and bitrates advertised to clients.
+   */
+  const std::array<opus_stream_config_t, MAX_STREAM_CONFIG> stream_configs {{
     {
       SAMPLE_RATE,
       2,
       1,
       1,
-      platf::speaker::map_stereo,
+      platf::speaker::map_stereo.data(),
       96000,
     },
     {
@@ -46,7 +63,7 @@ namespace audio {
       2,
       1,
       1,
-      platf::speaker::map_stereo,
+      platf::speaker::map_stereo.data(),
       512000,
     },
     {
@@ -54,7 +71,7 @@ namespace audio {
       6,
       4,
       2,
-      platf::speaker::map_surround51,
+      platf::speaker::map_surround51.data(),
       256000,
     },
     {
@@ -62,7 +79,7 @@ namespace audio {
       6,
       6,
       0,
-      platf::speaker::map_surround51,
+      platf::speaker::map_surround51.data(),
       1536000,
     },
     {
@@ -70,7 +87,7 @@ namespace audio {
       8,
       5,
       3,
-      platf::speaker::map_surround71,
+      platf::speaker::map_surround71.data(),
       450000,
     },
     {
@@ -78,12 +95,19 @@ namespace audio {
       8,
       8,
       0,
-      platf::speaker::map_surround71,
+      platf::speaker::map_surround71.data(),
       2048000,
     },
-  };
+  }};
 
-  void encodeThread(sample_queue_t samples, config_t config, void *channel_data) {
+  /**
+   * @brief Encode captured PCM samples into Opus packets on the audio worker thread.
+   *
+   * @param samples Queue of captured PCM sample buffers to encode.
+   * @param config Audio stream settings negotiated with the client.
+   * @param channel_data Stream session carried with each encoded packet.
+   */
+  void encodeThread(sample_queue_t samples, config_t config, stream::session_t *channel_data) {
     auto packets = mail::man->queue<packet_t>(mail::audio_packets);
     auto stream = stream_configs[map_stream(config.channels, config.flags[config_t::HIGH_QUALITY])];
     if (config.flags[config_t::CUSTOM_SURROUND_PARAMS]) {
@@ -91,6 +115,7 @@ namespace audio {
     }
 
     // Encoding takes place on this thread
+    platf::set_thread_name("audio::encode");
     platf::adjust_thread_priority(platf::thread_priority_e::high);
 
     opus_t opus {opus_multistream_encoder_create(
@@ -114,7 +139,7 @@ namespace audio {
     while (auto sample = samples->pop()) {
       buffer_t packet {1400};
 
-      int bytes = opus_multistream_encode_float(opus.get(), sample->data(), frame_size, std::begin(packet), packet.size());
+      int bytes = opus_multistream_encode_float(opus.get(), sample->data(), frame_size, std::begin(packet), (opus_int32) packet.size());
       if (bytes < 0) {
         BOOST_LOG(error) << "Couldn't encode audio: "sv << opus_strerror(bytes);
         packets->stop();
@@ -127,7 +152,10 @@ namespace audio {
     }
   }
 
-  void capture(safe::mail_t mail, config_t config, void *channel_data) {
+  /**
+   * @brief Run the capture loop for this backend.
+   */
+  void capture(safe::mail_t mail, config_t config, stream::session_t *channel_data) {
     auto shutdown_event = mail->event<bool>(mail::shutdown);
     if (!config::audio.stream || config.input_only) {
       shutdown_event->view();
@@ -196,7 +224,9 @@ namespace audio {
     }
 
     auto frame_size = config.packetDuration * stream.sampleRate / 1000;
-    auto mic = control->microphone(stream.mapping, stream.channelCount, stream.sampleRate, frame_size);
+    bool host_audio = config.flags[config_t::HOST_AUDIO];
+    bool continuous_audio = config.flags[config_t::CONTINUOUS_AUDIO];
+    auto mic = control->microphone(stream.mapping, stream.channelCount, stream.sampleRate, frame_size, continuous_audio, host_audio);
     if (!mic) {
       return;
     }
@@ -208,9 +238,9 @@ namespace audio {
     platf::adjust_thread_priority(platf::thread_priority_e::critical);
 
     auto samples = std::make_shared<sample_queue_t::element_type>(30);
-    std::thread thread {encodeThread, samples, config, channel_data};
+    std::jthread thread {encodeThread, samples, config, channel_data};
 
-    auto fg = util::fail_guard([&]() {
+    auto fg = util::fail_guard([&samples, &thread, &shutdown_event]() {
       samples->stop();
       thread.join();
 
@@ -234,13 +264,12 @@ namespace audio {
             BOOST_LOG(info) << "Reinitializing audio capture"sv;
             mic.reset();
             do {
-              mic = control->microphone(stream.mapping, stream.channelCount, stream.sampleRate, frame_size);
+              mic = control->microphone(stream.mapping, stream.channelCount, stream.sampleRate, frame_size, continuous_audio, host_audio);
               if (!mic) {
                 BOOST_LOG(warning) << "Couldn't re-initialize audio input"sv;
               }
             } while (!mic && !shutdown_event->view(5s));
           }
-
           continue;
         default:
           return;
@@ -268,6 +297,9 @@ namespace audio {
     return ctx.control->is_sink_available(sink);
   }
 
+  /**
+   * @brief Select the Opus stream configuration for a channel count and quality tier.
+   */
   int map_stream(int channels, bool quality) {
     int shift = quality ? 1 : 0;
     switch (channels) {
@@ -326,6 +358,6 @@ namespace audio {
     stream.channelCount = params.channelCount;
     stream.streams = params.streams;
     stream.coupledStreams = params.coupledStreams;
-    stream.mapping = params.mapping;
+    stream.mapping = params.mapping.data();
   }
 }  // namespace audio

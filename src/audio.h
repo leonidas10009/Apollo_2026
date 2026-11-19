@@ -9,9 +9,17 @@
 #include "thread_safe.h"
 #include "utility.h"
 
+#include <array>
 #include <bitset>
 
+namespace stream {
+  struct session_t;
+}
+
 namespace audio {
+  /**
+   * @brief Supported Opus channel layouts advertised to Moonlight clients.
+   */
   enum stream_config_e : int {
     STEREO,  ///< Stereo
     HIGH_STEREO,  ///< High stereo
@@ -22,62 +30,97 @@ namespace audio {
     MAX_STREAM_CONFIG  ///< Maximum audio stream configuration
   };
 
+  /**
+   * @brief Static Opus encoder layout for one advertised audio mode.
+   */
   struct opus_stream_config_t {
-    std::int32_t sampleRate;
-    int channelCount;
-    int streams;
-    int coupledStreams;
-    const std::uint8_t *mapping;
-    int bitrate;
+    std::int32_t sampleRate;  ///< Opus sample rate in hertz.
+    int channelCount;  ///< Number of audio channels in the Opus layout.
+    int streams;  ///< Number of Opus streams in the layout.
+    int coupledStreams;  ///< Number of stereo-coupled Opus streams.
+    const std::uint8_t *mapping;  ///< Channel mapping table passed to the Opus encoder.
+    int bitrate;  ///< Target bitrate in bits per second.
   };
 
+  /**
+   * @brief Custom Opus channel layout supplied by configuration.
+   */
   struct stream_params_t {
-    int channelCount;
-    int streams;
-    int coupledStreams;
-    std::uint8_t mapping[8];
+    int channelCount;  ///< Number of audio channels in the Opus layout.
+    int streams;  ///< Number of Opus streams in the custom layout.
+    int coupledStreams;  ///< Number of stereo-coupled Opus streams.
+    std::array<std::uint8_t, 8> mapping;  ///< Channel mapping table for up to eight speakers.
   };
 
-  extern opus_stream_config_t stream_configs[MAX_STREAM_CONFIG];
+  /**
+   * @brief Opus layouts and bitrates advertised for each supported stream mode.
+   */
+  extern const std::array<opus_stream_config_t, MAX_STREAM_CONFIG> stream_configs;
 
+  /**
+   * @brief Audio capture and encoder settings for a stream.
+   */
   struct config_t {
+    /**
+     * @brief Boolean audio feature flags.
+     */
     enum flags_e : int {
       HIGH_QUALITY,  ///< High quality audio
       HOST_AUDIO,  ///< Host audio
       CUSTOM_SURROUND_PARAMS,  ///< Custom surround parameters
+      CONTINUOUS_AUDIO,  ///< Continuous audio
       MAX_FLAGS  ///< Maximum number of flags
     };
 
-    int packetDuration;
-    int channels;
-    int mask;
+    int packetDuration;  ///< Packet duration in milliseconds requested by the client.
+    int channels;  ///< Number of audio channels requested by the client.
+    int mask;  ///< Speaker mask describing the requested channel layout.
 
-    stream_params_t customStreamParams;
+    stream_params_t customStreamParams;  ///< Custom Opus layout used when CUSTOM_SURROUND_PARAMS is enabled.
 
-    std::bitset<MAX_FLAGS> flags;
+    std::bitset<MAX_FLAGS> flags;  ///< Enabled audio feature flags.
 
     // Who TF knows what Sunshine did
     // putting input_only at the end of flags will always be over written to true
-    uint64_t __padding;
+    uint64_t __padding;  ///< Padding that keeps input_only past the flags storage.
 
-    bool input_only;
+    bool input_only;  ///< Whether audio capture is disabled for an input-only stream.
   };
 
+  /**
+   * @brief Shared audio device state used while streams are active.
+   */
   struct audio_ctx_t {
     // We want to change the sink for the first stream only
-    std::unique_ptr<std::atomic_bool> sink_flag;
+    std::unique_ptr<std::atomic_bool> sink_flag;  ///< Tracks whether the capture sink was already switched.
 
-    std::unique_ptr<platf::audio_control_t> control;
+    std::unique_ptr<platf::audio_control_t> control;  ///< Platform audio-control implementation.
 
-    bool restore_sink;
-    platf::sink_t sink;
+    bool restore_sink;  ///< Whether Sunshine should restore the original sink when capture ends.
+    platf::sink_t sink;  ///< Original sink captured before Sunshine switched devices.
   };
 
+  /**
+   * @brief Byte buffer used for encoded audio packet payloads.
+   */
   using buffer_t = util::buffer_t<std::uint8_t>;
-  using packet_t = std::pair<void *, buffer_t>;
+  /**
+   * @brief Encoded audio packet paired with its owning stream session.
+   */
+  using packet_t = std::pair<stream::session_t *, buffer_t>;
+  /**
+   * @brief Shared mailbox reference to the global audio context.
+   */
   using audio_ctx_ref_t = safe::shared_t<audio_ctx_t>::ptr_t;
 
-  void capture(safe::mail_t mail, config_t config, void *channel_data);
+  /**
+   * @brief Capture, encode, and publish audio packets for a stream.
+   *
+   * @param mail Mailbox used to publish encoded audio packets.
+   * @param config Audio capture and encoder settings.
+   * @param channel_data Stream session that receives the encoded packets.
+   */
+  void capture(safe::mail_t mail, config_t config, stream::session_t *channel_data);
 
   /**
    * @brief Get the reference to the audio context.
@@ -104,6 +147,7 @@ namespace audio {
    * }
    * return false;
    * @examples_end
+   * @param ctx Native context object used by the operation or callback.
    */
   bool is_audio_ctx_sink_available(const audio_ctx_t &ctx);
 }  // namespace audio

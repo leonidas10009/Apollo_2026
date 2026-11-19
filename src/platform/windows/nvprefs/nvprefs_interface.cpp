@@ -3,6 +3,7 @@
  * @brief Definitions for nvidia preferences interface.
  */
 // standard includes
+#include <array>
 #include <cassert>
 
 // local includes
@@ -19,13 +20,16 @@ namespace {
 
 namespace nvprefs {
 
+  /**
+   * @brief Private state owned by the NVIDIA preferences interface.
+   */
   struct nvprefs_interface::impl {
-    bool loaded = false;
-    driver_settings_t driver_settings;
-    std::filesystem::path undo_folder_path;
-    std::filesystem::path undo_file_path;
-    std::optional<undo_data_t> undo_data;
-    std::optional<undo_file_t> undo_file;
+    bool loaded = false;  ///< Whether NVIDIA preference state has been loaded.
+    driver_settings_t driver_settings;  ///< Driver settings.
+    std::filesystem::path undo_folder_path;  ///< Undo folder path.
+    std::filesystem::path undo_file_path;  ///< Undo file path.
+    std::optional<undo_data_t> undo_data;  ///< Undo data.
+    std::optional<undo_file_t> undo_file;  ///< Undo file.
   };
 
   nvprefs_interface::nvprefs_interface():
@@ -42,15 +46,14 @@ namespace nvprefs {
   bool nvprefs_interface::load() {
     if (!pimpl->loaded) {
       // Check %ProgramData% variable, need it for storing undo file
-      wchar_t program_data_env[MAX_PATH];
-      auto get_env_result = GetEnvironmentVariableW(L"ProgramData", program_data_env, MAX_PATH);
-      if (get_env_result == 0 || get_env_result >= MAX_PATH || !std::filesystem::is_directory(program_data_env)) {
+      std::array<wchar_t, MAX_PATH> program_data_env;
+      if (auto get_env_result = GetEnvironmentVariableW(L"ProgramData", program_data_env.data(), program_data_env.size()); get_env_result == 0 || get_env_result >= MAX_PATH || !std::filesystem::is_directory(program_data_env.data())) {
         error_message("Missing or malformed %ProgramData% environment variable");
         return false;
       }
 
       // Prepare undo file path variables
-      pimpl->undo_folder_path = std::filesystem::path(program_data_env) / sunshine_program_data_folder;
+      pimpl->undo_folder_path = std::filesystem::path(program_data_env.data()) / sunshine_program_data_folder;
       pimpl->undo_file_path = pimpl->undo_folder_path / nvprefs_undo_file_name;
 
       // Dynamically load nvapi library and load driver settings
@@ -106,8 +109,7 @@ namespace nvprefs {
     }
 
     // Modify and save sunshine.exe application profile settings, if needed
-    bool modified = false;
-    if (!pimpl->driver_settings.check_and_modify_application_profile(modified)) {
+    if (bool modified = false; !pimpl->driver_settings.check_and_modify_application_profile(modified)) {
       error_message("Failed to modify application profile settings");
       return false;
     } else if (modified) {
@@ -139,7 +141,7 @@ namespace nvprefs {
       return true;
     }
 
-    auto make_undo_and_commit = [&]() -> bool {
+    auto make_undo_and_commit = [&]() {
       // Create and lock undo file if it hasn't been done yet
       if (!pimpl->undo_file) {
         // Prepare Sunshine folder in ProgramData if it doesn't exist
@@ -191,7 +193,7 @@ namespace nvprefs {
     return true;
   }
 
-  bool nvprefs_interface::owning_undo_file() {
+  bool nvprefs_interface::owning_undo_file() const {
     return pimpl->undo_file.has_value();
   }
 
@@ -201,8 +203,7 @@ namespace nvprefs {
     }
 
     // Restore global profile settings with undo data
-    if (pimpl->driver_settings.restore_global_profile_to_undo(*pimpl->undo_data) &&
-        pimpl->driver_settings.save_settings()) {
+    if (pimpl->driver_settings.restore_global_profile_to_undo(*pimpl->undo_data) && pimpl->driver_settings.save_settings()) {
       // Global profile settings sucessfully restored, can delete undo file
       if (!pimpl->undo_file->delete_file()) {
         error_message("Couldn't delete undo file");

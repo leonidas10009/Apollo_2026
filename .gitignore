@@ -40,11 +40,14 @@
 # build directories
 build/
 cmake-*/
-docs/doxyconfig*
+/.dockle/
+/_site/
 
 # npm
 node_modules/
-package-lock.json
+coverage/
+junit.xml
+.vitest/
 
 # Translations
 *.mo
@@ -54,5 +57,7 @@ package-lock.json
 .DS_Store
 
 # Python
+*.egg-info/
 *.pyc
+.venv/
 venv/

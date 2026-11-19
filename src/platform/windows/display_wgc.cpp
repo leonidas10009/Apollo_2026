@@ -29,6 +29,13 @@ namespace winrt {
   using namespace Windows::Graphics::DirectX::Direct3D11;
 
   extern "C" {
+    /**
+     * @brief Create direct3 D11 device from DXGI device.
+     *
+     * @param dxgiDevice DXGI device.
+     * @param graphicsDevice Graphics device.
+     * @return Created direct3 D11 device from DXGI device object or status.
+     */
     HRESULT __stdcall CreateDirect3D11DeviceFromDXGIDevice(::IDXGIDevice *dxgiDevice, ::IInspectable **graphicsDevice);
   }
 
@@ -42,7 +49,14 @@ namespace winrt {
     __declspec(uuid("A9B3D012-3DF2-4EE3-B8D1-8695F457D3C1"))
 #endif
     IDirect3DDxgiInterfaceAccess: ::IUnknown {
-    virtual HRESULT __stdcall GetInterface(REFIID id, void **object) = 0;
+    /**
+     * @brief Retrieve a DXGI interface from a WinRT Direct3D object.
+     *
+     * @param id COM interface ID requested from the WinRT wrapper.
+     * @param object Output pointer that receives the requested COM interface.
+     * @return HRESULT from the WinRT object's interface query.
+     */
+    virtual HRESULT __stdcall GetInterface(REFIID id, void **object) = 0;  // NOSONAR(cpp:S5008): IDirect3DDxgiInterfaceAccess::GetInterface requires a void double pointer in the WinRT ABI.
   };
 }  // namespace winrt
 #if !WINRT_IMPL_HAS_DECLSPEC_UUID
@@ -54,6 +68,11 @@ static constexpr GUID GUID__IDirect3DDxgiInterfaceAccess = {
   // compare with __declspec(uuid(...)) for the struct above.
 };
 
+/**
+ * @brief Return the GUID used to request IDirect3DDxgiInterfaceAccess.
+ *
+ * @return GUID for the WinRT DXGI interface-access helper.
+ */
 template<>
 constexpr auto __mingw_uuidof<winrt::IDirect3DDxgiInterfaceAccess>() -> GUID const & {
   return GUID__IDirect3DDxgiInterfaceAccess;
@@ -108,8 +127,7 @@ namespace platf::dxgi {
     display->output->GetDesc(&output_desc);
 
     auto monitor_factory = winrt::get_activation_factory<winrt::GraphicsCaptureItem, IGraphicsCaptureItemInterop>();
-    if (monitor_factory == nullptr ||
-        FAILED(status = monitor_factory->CreateForMonitor(output_desc.Monitor, winrt::guid_of<winrt::IGraphicsCaptureItem>(), winrt::put_abi(item)))) {
+    if (monitor_factory == nullptr || FAILED(status = monitor_factory->CreateForMonitor(output_desc.Monitor, winrt::guid_of<winrt::IGraphicsCaptureItem>(), winrt::put_abi(item)))) {
       BOOST_LOG(error) << "Screen capture is not supported on this device for this release of Windows: failed to acquire display: [0x"sv << util::hex(status).to_string_view() << ']';
       return -1;
     }
@@ -185,9 +203,6 @@ namespace platf::dxgi {
   /**
    * @brief Get the next frame from the producer thread.
    * If not available, the capture thread blocks until one is, or the wait times out.
-   * @param timeout how long to wait for the next frame
-   * @param out a texture containing the frame just captured
-   * @param out_time the timestamp of the frame just captured
    */
   capture_e wgc_capture_t::next_frame(std::chrono::milliseconds timeout, ID3D11Texture2D **out, uint64_t &out_time) {
     // this CONSUMER runs in the capture thread
@@ -199,7 +214,7 @@ namespace platf::dxgi {
       if (GetLastError() == ERROR_TIMEOUT) {
         return capture_e::timeout;
       } else {
-        return capture_e::error;
+        return capture_e::capture_error;
       }
     }
     if (produced_frame) {
@@ -213,7 +228,7 @@ namespace platf::dxgi {
 
     auto capture_access = consumed_frame.Surface().as<winrt::IDirect3DDxgiInterfaceAccess>();
     if (capture_access == nullptr) {
-      return capture_e::error;
+      return capture_e::capture_error;
     }
     capture_access->GetInterface(IID_ID3D11Texture2D, (void **) out);
     out_time = consumed_frame.SystemRelativeTime().count();  // raw ticks from query performance counter
@@ -250,10 +265,6 @@ namespace platf::dxgi {
 
   /**
    * @brief Get the next frame from the Windows.Graphics.Capture API and copy it into a new snapshot texture.
-   * @param pull_free_image_cb call this to get a new free image from the video subsystem.
-   * @param img_out the captured frame is returned here
-   * @param timeout how long to wait for the next frame
-   * @param cursor_visible whether to capture the cursor
    */
   capture_e display_wgc_ram_t::snapshot(const pull_free_image_cb_t &pull_free_image_cb, std::shared_ptr<platf::img_t> &img_out, std::chrono::milliseconds timeout, bool cursor_visible) {
     HRESULT status;
@@ -284,11 +295,11 @@ namespace platf::dxgi {
       t.Format = capture_format;
       t.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
 
-      auto status = device->CreateTexture2D(&t, nullptr, &texture);
+      auto texture_status = device->CreateTexture2D(&t, nullptr, &texture);
 
-      if (FAILED(status)) {
-        BOOST_LOG(error) << "Failed to create staging texture [0x"sv << util::hex(status).to_string_view() << ']';
-        return capture_e::error;
+      if (FAILED(texture_status)) {
+        BOOST_LOG(error) << "Failed to create staging texture [0x"sv << util::hex(texture_status).to_string_view() << ']';
+        return capture_e::capture_error;
       }
     }
 
@@ -317,17 +328,18 @@ namespace platf::dxgi {
     if (FAILED(status = device_ctx->Map(texture.get(), 0, D3D11_MAP_READ, 0, &img_info))) {
       BOOST_LOG(error) << "Failed to map texture [0x"sv << util::hex(status).to_string_view() << ']';
 
-      return capture_e::error;
+      return capture_e::capture_error;
     }
 
     // Now that we know the capture format, we can finish creating the image
     if (complete_img(img, false)) {
       device_ctx->Unmap(texture.get(), 0);
       img_info.pData = nullptr;
-      return capture_e::error;
+      return capture_e::capture_error;
     }
 
-    std::copy_n((std::uint8_t *) img_info.pData, height * img_info.RowPitch, (std::uint8_t *) img->data);
+    // WGC already supplies pixels in desktop orientation.
+    copy_mapped_image(img_info, *img, DXGI_MODE_ROTATION_IDENTITY);
 
     // Unmap the staging texture to allow GPU access again
     device_ctx->Unmap(texture.get(), 0);

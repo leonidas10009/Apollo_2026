@@ -6,6 +6,8 @@
 
 // standard includes
 #include <atomic>
+#include <optional>
+#include <string>
 #include <string_view>
 
 // local includes
@@ -13,12 +15,19 @@
 #include "thread_safe.h"
 
 /**
+ * @brief Build the URL used to launch the Web UI.
+ * @param path Optional path to append to the base URL.
+ * @return HTTPS URL using the configured bind address and Web UI port.
+ * @examples
+ * get_launch_ui_url();
+ * get_launch_ui_url("/pin");
+ * @examples_end
+ */
+std::string get_launch_ui_url(const std::optional<std::string> &path = std::nullopt);
+
+/**
  * @brief Launch the Web UI.
  * @param path Optional path to append to the base URL.
- * @examples
- * launch_ui();
- * launch_ui("/pin");
- * @examples_end
  */
 void launch_ui(const std::optional<std::string> &path = std::nullopt);
 
@@ -34,6 +43,8 @@ namespace args {
    * @examples
    * creds("sunshine", 2, {"new_username", "new_password"});
    * @examples_end
+   *
+   * @return Process exit code from updating the stored credentials.
    */
   int creds(const char *name, int argc, char *argv[]);
 
@@ -43,6 +54,8 @@ namespace args {
    * @examples
    * help("sunshine");
    * @examples_end
+   *
+   * @return Process exit code after printing command usage.
    */
   int help(const char *name);
 
@@ -51,6 +64,8 @@ namespace args {
    * @examples
    * version();
    * @examples_end
+   *
+   * @return Process exit code after printing the Sunshine version.
    */
   int version();
 
@@ -63,6 +78,8 @@ namespace args {
    * @examples
    * restore_nvprefs_undo();
    * @examples_end
+   *
+   * @return Process exit code from restoring NVIDIA profile preferences.
    */
   int restore_nvprefs_undo();
 #endif
@@ -89,6 +106,8 @@ namespace lifetime {
 
   /**
    * @brief Get the argv array passed to main().
+   *
+   * @return Original argument vector captured from main().
    */
   char **get_argv();
 }  // namespace lifetime
@@ -114,6 +133,8 @@ namespace service_ctrl {
    * @examples
    * is_service_running();
    * @examples_end
+   *
+   * @return True when the requested service or UI readiness condition is satisfied.
    */
   bool is_service_running();
 
@@ -122,6 +143,8 @@ namespace service_ctrl {
    * @examples
    * start_service();
    * @examples_end
+   *
+   * @return True when the requested service or UI readiness condition is satisfied.
    */
   bool start_service();
 
@@ -130,6 +153,8 @@ namespace service_ctrl {
    * @examples
    * wait_for_ui_ready();
    * @examples_end
+   *
+   * @return True when the requested service or UI readiness condition is satisfied.
    */
   bool wait_for_ui_ready();
 }  // namespace service_ctrl
