@@ -10,6 +10,15 @@ Major features:
 - [x] Commands for client connection/disconnection (checkout [Auto pause/resume games](https://github.com/ClassicOldSong/Apollo/wiki/Auto-pause-resume-games))
 - [x] Input only mode
 
+## Credits
+
+Apollo 2026 is a continuation of **Apollo**, originally created by
+**ClassicOldSong (Yukino Song)** — https://github.com/ClassicOldSong/Apollo — and is based on
+**Sunshine** by LizardByte and contributors — https://github.com/SunshineStream/Sunshine.
+
+The full Git history, authorship, GPL-3.0 license, and upstream notices are retained. See
+[CREDITS.md](CREDITS.md) for details.
+
 ## Usage
 
 Apollo is based on the Sunshine 2026 codebase. The documentation in this repository is the
