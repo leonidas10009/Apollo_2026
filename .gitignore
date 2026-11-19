@@ -61,3 +61,7 @@ junit.xml
 *.pyc
 .venv/
 venv/
+
+# SudoVDA driver package binaries required by the Windows installer
+!src_assets/windows/drivers/sudovda/SudoVDA.dll
+!src_assets/windows/drivers/sudovda/nefconc.exe

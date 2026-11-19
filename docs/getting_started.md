@@ -639,6 +639,11 @@ Sunshine supports two virtual gamepad backends on Windows. You can install the
 Its Windows package includes a broker service and user-mode driver for a Raw Input keyboard and mouse plus full virtual
 gamepad support. ViGEmBus remains available as a limited alternative for Xbox 360 and DualShock 4 gamepads, but it has reached end of life.
 
+> [!NOTE]
+> The Apollo Windows installer bundles the complete SudoVDA driver package for
+> virtual displays. It does not bundle ViGEmBus or the Virtual HID Broker:
+> ViGEmBus is end-of-life, and the broker is a separate licensed download.
+
 When Virtual HID Broker is used, Sunshine requires libvirtualhid version `2026.914.1218.10` or newer.
 
 Compared with the ViGEmBus fallback, Virtual HID Broker can create Xbox One, Xbox Series, DualSense, Nintendo Switch

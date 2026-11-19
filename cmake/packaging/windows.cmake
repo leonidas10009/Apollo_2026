@@ -17,7 +17,24 @@ install(TARGETS audio-info RUNTIME DESTINATION "tools" COMPONENT audio)
 install(TARGETS sunshinesvc RUNTIME DESTINATION "tools" COMPONENT application)
 
 # Drivers
-install(DIRECTORY "${SUNSHINE_SOURCE_ASSETS_DIR}/windows/drivers/sudovda"
+# The Windows installer must ship a complete SudoVDA package. Fail early instead
+# of producing an installer that silently cannot create the virtual display.
+set(SUDOVDA_DRIVER_DIR "${SUNSHINE_SOURCE_ASSETS_DIR}/windows/drivers/sudovda")
+foreach(SUDOVDA_REQUIRED_FILE
+        "SudoVDA.dll"
+        "SudoVDA.inf"
+        "sudovda.cat"
+        "sudovda.cer"
+        "nefconc.exe"
+        "install.bat"
+        "uninstall.bat")
+    if(NOT EXISTS "${SUDOVDA_DRIVER_DIR}/${SUDOVDA_REQUIRED_FILE}")
+        message(FATAL_ERROR
+                "Missing SudoVDA package file: ${SUDOVDA_DRIVER_DIR}/${SUDOVDA_REQUIRED_FILE}. "
+                "See src_assets/windows/drivers/sudovda/README.md for provenance and hashes.")
+    endif()
+endforeach()
+install(DIRECTORY "${SUDOVDA_DRIVER_DIR}"
         DESTINATION "drivers"
         COMPONENT sudovda)
 

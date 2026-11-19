@@ -24,7 +24,19 @@ SET(CPACK_NSIS_EXTRA_INSTALL_COMMANDS
           'powershell -ExecutionPolicy Bypass \
           -File \\\"$INSTDIR\\\\scripts\\\\sunshine-setup.ps1\\\" -Action install -Silent'
         install_done:
+        IfFileExists \\\"$INSTDIR\\\\drivers\\\\sudovda\\\\install.bat\\\" 0 sudovda_missing
         nsExec::ExecToLog '\\\"$INSTDIR\\\\drivers\\\\sudovda\\\\install.bat\\\"'
+        Pop $0
+        StrCmp $0 "0" sudovda_done
+        IfSilent sudovda_done
+        MessageBox MB_ICONEXCLAMATION|MB_OK \
+          'SudoVDA driver installation failed. Virtual Display will not work until this is fixed.'
+        Goto sudovda_done
+        sudovda_missing:
+        IfSilent sudovda_done
+        MessageBox MB_ICONEXCLAMATION|MB_OK \
+          'The SudoVDA driver package is missing from this installer. Virtual Display will not be available.'
+        sudovda_done:
         ")
 
 # Extra uninstall commands
@@ -35,6 +47,7 @@ set(CPACK_NSIS_EXTRA_UNINSTALL_COMMANDS
         nsExec::ExecToLog \
           'powershell -ExecutionPolicy Bypass \
           -File \\\"$INSTDIR\\\\scripts\\\\sunshine-setup.ps1\\\" -Action uninstall'
+        IfFileExists \\\"$INSTDIR\\\\drivers\\\\sudovda\\\\uninstall.bat\\\" 0 NoSudoVDA
         MessageBox MB_YESNO|MB_ICONQUESTION \
             'Do you want to remove SudoVDA Virtual Display Driver?' \
             /SD IDNO IDNO NoSudoVDA
