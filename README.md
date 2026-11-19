@@ -5,6 +5,7 @@ Apollo is a self-hosted desktop stream host for [Artemis(Moonlight Noir)](https:
 Major features:
 
 - [x] Built-in Virtual Display with HDR support that matches the resolution/framerate config of your client automatically
+- [x] Modern responsive Web UI with a host dashboard, sidebar navigation, command palette (`Ctrl+K`), and theme switcher
 - [x] Permission management for clients
 - [x] Clipboard sync
 - [x] Commands for client connection/disconnection (checkout [Auto pause/resume games](https://github.com/ClassicOldSong/Apollo/wiki/Auto-pause-resume-games))
@@ -54,6 +55,8 @@ Check out the [Wiki](https://github.com/ClassicOldSong/Apollo/wiki/Permission-Sy
 > **TL;DR** Just treat your Artemis/Moonlight client like a dedicated PnP monitor with Apollo.
 
 Apollo uses SudoVDA for virtual display. It features auto resolution and framerate matching for your Artemis/Moonlight clients. The virtual display is created upon the stream starts and removed once the app quits. **If you do not see a new virtual display added or removed when the stream starts or stops, there may be a driver misconfiguration, or another persistent virtual display might still be active.**
+
+The Windows installer bundles the complete SudoVDA driver package, including the signed driver and the `nefconc` device-installation tool. ViGEmBus is **not** bundled because it is end-of-life; see the gamepad section in the documentation for the supported backends.
 
 The virtual display works just like any physically attached monitors with SudoVDA, there's completely no need for a super complicated solution to "fix" resolution configurations for your devices. Unlike all other solutions that reuses one identity or generate a random one each time for any virtual display sessions, **Apollo assigns a fixed identity for each Artemis/Moonlight client, so your display configuration will be automatically remembered and managed by Windows natively.**
 
@@ -121,7 +124,7 @@ Here're some common causes and solutions for stutters: [WiKi](https://github.com
 | CPU           | AMD: Ryzen 3 or higher |
 |               | Intel: Core i3 or higher |
 | RAM           | 4GB or more |
-| OS            | Windows: 10+ (Windows Server requires [manual installation](https://github.com/nefarius/ViGEmBus/issues/153) for gamepad support) |
+| OS            | Windows: 10 22H2+ or 11 (SudoVDA virtual display requires 22H2+; gamepads need Virtual HID Broker or a manually installed ViGEmBus fallback) |
 |               | macOS: 12+ |
 |               | Linux/Debian: 11 (bullseye) |
 |               | Linux/Fedora: 39+ |

@@ -388,6 +388,11 @@ Its Windows package includes a broker service and user-mode driver for a Raw Inp
 gamepad support. ViGEmBus is a limited alternative for Xbox 360 and DualShock 4 support that has reached end of life. If you use the
 [ViGEmBus fallback](https://github.com/nefarius/ViGEmBus/releases/latest), you must use version 1.17 or newer.
 
+> [!NOTE]
+> The Apollo Windows installer bundles SudoVDA for virtual displays, but it does
+> not bundle ViGEmBus or the Virtual HID Broker. Install the backend you want
+> separately; the broker requires a paid license on Windows and macOS.
+
 When Virtual HID Broker is used, Apollo requires libvirtualhid version `2026.914.1218.10` or newer.
 
 Virtual HID Broker adds Xbox One, Xbox Series, DualSense, Nintendo Switch Pro, and Generic gamepads, plus advanced

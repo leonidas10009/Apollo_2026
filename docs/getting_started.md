@@ -496,19 +496,24 @@ brew uninstall sunshine
 #### Installer (recommended)
 
 > [!CAUTION]
-> The msi installer is preferred moving forward. Before using a different type of installer, you should manually
-> uninstall the previous installation.
+> Use the installer published for your architecture. If you switch between installer formats, uninstall the
+> previous installation first.
 
-1. Download and install based on your architecture:
+1. Download and install the latest Apollo Windows installer from the
+   [Apollo_2026 releases page](https://github.com/leonidas10009/Apollo_2026/releases).
 
-   | Architecture          | Installer                                                                                                                                    |
-   |-----------------------|----------------------------------------------------------------------------------------------------------------------------------------------|
-   | AMD64/x64 (Intel/AMD) | [Sunshine-Windows-AMD64-installer.msi](https://github.com/SunshineStream/Sunshine/releases/latest/download/Sunshine-Windows-AMD64-installer.msi) |
-   | ARM64                 | [Sunshine-Windows-ARM64-installer.msi](https://github.com/SunshineStream/Sunshine/releases/latest/download/Sunshine-Windows-ARM64-installer.msi) |
+   | Architecture          | Installer |
+   |-----------------------|-----------|
+   | AMD64/x64 (Intel/AMD) | Apollo Windows installer from the releases page |
+   | ARM64                 | Apollo Windows installer from the releases page (experimental) |
+
+   > [!NOTE]
+   > If no installer has been published yet, build it from source as described in
+   > [Building](building.md). Do not install the upstream Sunshine MSI instead.
 
 > [!TIP]
 > Installer logs can be found in the following directory:
-> `%%TEMP%/Sunshine/logs/install/`
+> `%TEMP%\Sunshine\logs\install\` (the internal directory name is inherited from upstream).
 
 > [!CAUTION]
 > You should carefully select or unselect the options you want to install. Do not blindly install or
@@ -523,12 +528,8 @@ overflow menu. Different versions of Windows may provide slightly different step
 > By using this package instead of the installer, performance will be reduced. This package is not
 > recommended for most users. No support will be provided!
 
-1. Download and extract based on your architecture:
-
-   | Architecture          | Installer                                                                                                                          |
-   |-----------------------|------------------------------------------------------------------------------------------------------------------------------------|
-   | AMD64/x64 (Intel/AMD) | [Sunshine-Windows-AMD64-lite.zip](https://github.com/SunshineStream/Sunshine/releases/latest/download/Sunshine-Windows-AMD64-lite.zip) |
-   | ARM64                 | [Sunshine-Windows-ARM64-lite.zip](https://github.com/SunshineStream/Sunshine/releases/latest/download/Sunshine-Windows-ARM64lite.zip)  |
+1. Download and extract the Apollo portable Windows package for your architecture from the
+   [Apollo_2026 releases page](https://github.com/leonidas10009/Apollo_2026/releases).
 
 2. Open command prompt as administrator
 3. Firewall rules
@@ -604,22 +605,22 @@ the system tray is enabled. Open **Troubleshooting > Permissions** in the Web UI
 open their System Settings pages. Apollo restarts once after missing required permissions are granted, including
 when a permission was removed and later restored.
 If macOS offers **Quit & Reopen** after you allow Screen Recording, choose it so the running process receives the new
-access. Sunshine exits its tray and server threads before macOS reopens it.
+access. Apollo exits its tray and server threads before macOS reopens it.
 
-On macOS 15 and newer, macOS requests Local Network access when Sunshine advertises itself with Bonjour. System Audio
+On macOS 15 and newer, macOS requests Local Network access when Apollo advertises itself with Bonjour. System Audio
 Recording access is requested once at startup with a brief audio tap, when the first stream captures audio if startup
 access was unavailable, or when you use its Web UI button. The button also opens Screen & System Audio Recording
-settings. macOS does not offer Sunshine a passive status check for Local Network
+settings. macOS does not offer Apollo a passive status check for Local Network
 or System Audio Recording, so the Web UI identifies them as permissions handled when used. The Local Network button
 opens **Privacy & Security**; choose **Local Network** there to manage app access.
-Sunshine uses libvirtualhid to send keyboard and mouse events through CoreGraphics. Virtual gamepads use the separately
-installed Virtual HID Broker described in the macOS gamepad setup above. Sunshine shows the broker's availability and
+Apollo uses libvirtualhid to send keyboard and mouse events through CoreGraphics. Virtual gamepads use the separately
+installed Virtual HID Broker described in the macOS gamepad setup above. Apollo shows the broker's availability and
 license under **Troubleshooting > Virtual Input**.
-If a macOS privacy switch is enabled but Sunshine still reports access denied, remove that Sunshine entry and add the
+If a macOS privacy switch is enabled but Apollo still reports access denied, remove that Apollo entry and add the
 installed app again. Development builds should use a consistent Apple-issued signing identity so macOS can recognize
 the app across updates.
 
-Sunshine supports native system audio capture on macOS 14.0 (Sonoma) and newer via Apple’s Audio Tap API.
+Apollo supports native system audio capture on macOS 14.0 (Sonoma) and newer via Apple’s Audio Tap API.
 To use it, simply leave the **Audio Sink** setting blank.
 
 If you prefer to manage your own loopback device, you can still use
@@ -634,17 +635,17 @@ and enter its device name in the [audio_sink](configuration.md#audio_sink) field
 > Gamepads are not currently supported.
 
 ### Windows
-Sunshine supports two virtual gamepad backends on Windows. You can install the
+Apollo supports two virtual gamepad backends on Windows. You can install the
 [Virtual HID Broker](https://github.com/LizardByte/libvirtualhid/releases/latest) separately as an optional paid upgrade.
 Its Windows package includes a broker service and user-mode driver for a Raw Input keyboard and mouse plus full virtual
-gamepad support. ViGEmBus remains available as a limited alternative for Xbox 360 and DualShock 4 gamepads, but it has reached end of life.
+gamepad support. ViGEmBus remains available as a limited alternative for Xbox 360 and DualShock 4 gamepads, but it has reached end of life and is not bundled by Apollo.
 
 > [!NOTE]
 > The Apollo Windows installer bundles the complete SudoVDA driver package for
 > virtual displays. It does not bundle ViGEmBus or the Virtual HID Broker:
 > ViGEmBus is end-of-life, and the broker is a separate licensed download.
 
-When Virtual HID Broker is used, Sunshine requires libvirtualhid version `2026.914.1218.10` or newer.
+When Virtual HID Broker is used, Apollo requires libvirtualhid version `2026.914.1218.10` or newer.
 
 Compared with the ViGEmBus fallback, Virtual HID Broker can create Xbox One, Xbox Series, DualSense, Nintendo Switch
 Pro, and Generic gamepads in addition to Xbox 360 and DualShock 4. It can also expose controller-specific features such
@@ -661,28 +662,28 @@ mouse so applications using Raw Input can receive them. Absolute mouse positioni
 injection. When the driver-backed mouse cannot be created, libvirtualhid retains its legacy SendInput fallback.
 
 The Virtual HID Broker requires an active paid machine license for driver-backed devices, including gamepads and the Raw
-Input keyboard and mouse. Sunshine shows the current license status and actions on the Web UI Troubleshooting page and
-in the **Virtual HID Broker** system tray submenu. In **Configuration > Input**, choose whether Sunshine may use **All
-Available Drivers**, only **Virtual HID Broker**, or only **ViGEmBus**. Sunshine continues to show the selection prompt
-until this setting is saved. If an active Virtual HID Broker license is already present, Sunshine selects **All Available
-Drivers** automatically. That policy prefers Virtual HID Broker. When its license is not valid, Sunshine falls back to
+Input keyboard and mouse. Apollo shows the current license status and actions on the Web UI Troubleshooting page and
+in the **Virtual HID Broker** system tray submenu. In **Configuration > Input**, choose whether Apollo may use **All
+Available Drivers**, only **Virtual HID Broker**, or only **ViGEmBus**. Apollo continues to show the selection prompt
+until this setting is saved. If an active Virtual HID Broker license is already present, Apollo selects **All Available
+Drivers** automatically. That policy prefers Virtual HID Broker. When its license is not valid, Apollo falls back to
 ViGEmBus for Xbox 360 and DualShock 4 gamepads and to SendInput for keyboard and mouse. Selecting only **ViGEmBus**
 suppresses Virtual HID Broker startup notifications and limits the available emulated gamepads to Xbox 360 and
 DualShock 4. **None** disables all virtual gamepads and their startup notices without affecting keyboard or mouse
-input. Sunshine recreates the shared keyboard and mouse after a successful license action, so switching between
-the HID and SendInput paths does not require restarting Sunshine.
+input. Apollo recreates the shared keyboard and mouse after a successful license action, so switching between
+the HID and SendInput paths does not require restarting Apollo.
 
 After installing or updating virtual input drivers, it is recommended to restart your computer.
 
 ## Usage
 
 ### Basic usage
-If Sunshine is not installed/running as a service, then start Sunshine with the following command, unless a start
+If Apollo is not installed/running as a service, start it with the following command, unless a start
 command is listed in the specified package [install](#install) instructions above.
 
 > [!NOTE]
-> A service is a process that runs in the background. This is the default when installing Sunshine from the
-> Windows installer. Running multiple instances of Sunshine is not advised.
+> A service is a process that runs in the background. This is the default when installing Apollo from the
+> Windows installer. Running multiple instances of Apollo is not advised.
 
 ```bash
 sunshine
@@ -721,7 +722,7 @@ on how to set up a headless streaming server without autologin and dummy plugs (
 
 ### Configuration
 
-Sunshine is configured via the web ui, which is available on [https://localhost:47990](https://localhost:47990)
+Apollo is configured via the Web UI, which is available on [https://localhost:47990](https://localhost:47990)
 by default. You may replace *localhost* with your internal ip address.
 
 > [!NOTE]
@@ -784,7 +785,7 @@ All shortcuts start with `Ctrl+Alt+Shift`, just like Moonlight.
   This can only be changed by modifying the `apps.json` file directly.
 
 ### Considerations
-* On Windows, Sunshine uses the Desktop Duplication API which only supports capturing from the GPU used for display.
+* On Windows, Apollo uses the Desktop Duplication API which only supports capturing from the GPU used for display.
   If you want to capture and encode on the eGPU, connect a display or HDMI dummy display dongle to it and run the games
   on that display.
 * When an application is started, if there is an application already running, it will be terminated.
