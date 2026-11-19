@@ -1,4 +1,9 @@
-# Create a stable Sunshine release
+# Create a stable Apollo release
+
+> [!NOTE]
+> This guide is inherited from upstream Sunshine and documents the LizardByte release
+> automation. Apollo releases in this repository use their own GitHub Actions, secrets, and
+> package destinations; adapt repository names and workflow targets before using it.
 
 Pre-releases in Sunshine are created automatically on every push event to the `master` branch. These are required
 to be created before making a stable release. Below are the instructions for converting a pre-release to stable.

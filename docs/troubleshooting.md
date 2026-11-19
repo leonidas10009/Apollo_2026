@@ -1,5 +1,40 @@
 # Troubleshooting
 
+> [!NOTE]
+> Apollo is based on the Apollo 2026 codebase. This guide inherits upstream
+> troubleshooting steps. Commands, package names, environment variables, and paths that
+> still use `sunshine`/`Sunshine` are compatibility identifiers.
+
+## Apollo client permissions and OTP
+
+### Client permissions
+
+Apollo manages permissions per paired client. The first client paired with the host
+receives full permissions. Later clients receive only **View Streams** and **List Apps** by
+default. If a client cannot launch an app or cannot send keyboard, mouse, touch, pen, or
+controller input, review its permissions:
+
+1. Open **Clients** in the Apollo Web UI.
+2. Select the edit button next to the device.
+3. Enable the required permissions, for example **Launch Apps**, **Keyboard Input**,
+   **Mouse Input**, or **Controller Input**.
+4. Save the changes and reconnect the client.
+
+The same page lets you unpair a device, disconnect an active session, set a display mode
+override (`WidthxHeightxFPS`, for example `1920x1080x59.94`), force a virtual display, and
+configure client connect/disconnect commands.
+
+### OTP pairing
+
+Recent Artemis clients can pair with a one-time passphrase instead of a PIN:
+
+1. Open **PIN** in the Web UI and select **OTP Pairing**.
+2. Enter a passphrase of at least four alphanumeric characters and an optional device name.
+3. Select **Generate PIN** and use the displayed `art://` link on the client.
+4. The one-time PIN is valid for approximately three minutes.
+
+If OTP pairing is not available in the client, use the standard PIN pairing tab.
+
 ## General
 
 ### Forgotten Credentials
@@ -25,16 +60,16 @@ If you forgot your credentials to the web UI, try this.
 > Do not include the curly braces.
 
 ### Unusual Mouse Behavior
-If you experience unusual mouse behavior, try attaching a physical mouse to the Sunshine host.
+If you experience unusual mouse behavior, try attaching a physical mouse to the Apollo host.
 
 For absolute-positioning problems, set **Configuration > Advanced > Log Level** to **Debug** and reproduce the issue.
-Sunshine forwards libvirtualhid diagnostics with a `[libvirtualhid]` prefix, including the streamed display viewport and
+Apollo forwards libvirtualhid diagnostics with a `[libvirtualhid]` prefix, including the streamed display viewport and
 full desktop bounds used for mouse coordinate mapping.
 
-For native touch or pen input on KDE Wayland, Sunshine maps its virtual devices to the streamed display.
+For native touch or pen input on KDE Wayland, Apollo maps its virtual devices to the streamed display.
 Use Plasma 6.5.1 or later, which fixes changing a device's assigned output. Display layouts with monitors
 left of or above the desktop origin are supported. Other Wayland compositors retain their device mapping
-settings; assign Sunshine's virtual touchscreen and pen tablet through the compositor's input configuration.
+settings; assign Apollo's virtual touchscreen and pen tablet through the compositor's input configuration.
 
 ### Web UI Access
 Can't access the web UI?
@@ -46,7 +81,7 @@ One trick might be to change Steam settings and check or uncheck the configurati
 controllers and leave only support for Generic controllers.
 
 Also, if you have many controllers already directly connected to the host, it might help to disable them so that the
-Sunshine-provided controller (connected to the guest) is the "first" one. In Linux this can be achieved on USB
+Apollo-provided controller (connected to the guest) is the "first" one. In Linux this can be achieved on USB
 devices by finding the device in `/sys/bus/usb/devices/` and writing `0` to the `authorized` file.
 
 ### Network performance test
@@ -57,7 +92,7 @@ consistency (low latency with low variance, minimal or no packet loss).
 
 The network can be tested using the multi-platform tool [iPerf3](https://iperf.fr).
 
-On the Sunshine host `iperf3` is started in server mode:
+On the Apollo host `iperf3` is started in server mode:
 
 ```bash
 iperf3 -s
@@ -82,9 +117,9 @@ If you are testing a remote connection (over the internet), you will need to
 forward the port 5201 (TCP and UDP) from your host.
 
 ### Packet loss (Buffer overrun)
-If the host PC (running Sunshine) has a much faster connection to the network
+If the host PC (running Apollo) has a much faster connection to the network
 than the slowest segment of the network path to the client device (running
-Moonlight), massive packet loss can occur: Sunshine emits its stream in bursts
+Moonlight), massive packet loss can occur: Apollo emits its stream in bursts
 every 16 ms (for 60 fps), but those bursts can't be passed on fast enough to the
 client and must be buffered by one of the network devices inbetween. If the
 bitrate is high enough, these buffers will overflow and data will be discarded.
@@ -96,7 +131,7 @@ client having only a 100 Mbps interface.
 As a workaround the transmission speed of the host NIC can be reduced: 1 Gbps
 instead of 2.5 or 100 Mbps instead of 1 Gbps. A technically more advanced
 solution would be to configure traffic shaping rules at the OS level, so that
-only Sunshine's traffic is slowed down.
+only Apollo's traffic is slowed down.
 
 Such a solution on Linux could look like that:
 
@@ -111,7 +146,7 @@ sudo tc qdisc add dev <NIC> root handle 1: htb default 1
 sudo tc class add dev <NIC> parent 1: classid 1:1 htb \
     rate 10000mbit ceil 10000mbit burst 32k
 
-# 4) Create class 1:10 for Sunshine game stream at 1 Gbit/s
+# 4) Create class 1:10 for Apollo game stream at 1 Gbit/s
 sudo tc class add dev <NIC> parent 1: classid 1:10 htb \
     rate 1000mbit ceil 1000mbit burst 32k
 
@@ -121,10 +156,10 @@ sudo tc filter add dev <NIC> protocol ip parent 1: prio 1 \
     match ip sport 47998 0xffff flowid 1:10
 ```
 
-In that way only the Sunshine traffic is limited by 1 Gbit. This is not persistent on reboots.
+In that way only the Apollo traffic is limited by 1 Gbit. This is not persistent on reboots.
 If you use a different port for the game stream, you need to adjust the last command.
 
-Sunshine versions > 0.23.1 include improved networking code that should
+Apollo versions > 0.23.1 include improved networking code that should
 alleviate or even solve this issue (without reducing the NIC speed).
 
 ### Packet loss (MTU)
@@ -139,11 +174,11 @@ resort suggestion.
 
 ### Hardware Encoders throttle/drop FPS during high GPU load
 Capture methods (`wlgrab`) or encoders (`nvenc`, `vaapi`) that utilize EGL contexts may exhibit FPS drops
-in conjunction with a Sunshine installation that runs in a sandboxed or reduced permissions state
+in conjunction with a Apollo installation that runs in a sandboxed or reduced permissions state
 (Flatpak, AppImage packages) due to the lack of active CAP_SYS_NICE process permissions
 needed to set up high priority EGL contexts.
 
-To check if you are affected by this issue, look out for this message in your Sunshine log:
+To check if you are affected by this issue, look out for this message in your Apollo log:
 ```
 Warning: EGL: context priority set to HIGH but CAP_SYS_NICE capability is missing
 ```
@@ -151,7 +186,7 @@ Warning: EGL: context priority set to HIGH but CAP_SYS_NICE capability is missin
 > [!IMPORTANT]
 > Switching to Vulkan encoding should resolve the issue for the majority of configurations, but refer to this
 > table for recommended configurations (especially if Vulkan encoding is not supported on your system):
-> | Desktop Environment | Vulkan Supported? | Recommended Sunshine Install Type | Recommended Capture & Encoder Configuration              |
+> | Desktop Environment | Vulkan Supported? | Recommended Apollo Install Type | Recommended Capture & Encoder Configuration              |
 > |:--------------------|-------------------|-----------------------------------|---------------------------------------------------------:|
 > | KDE Plasma          | Yes               | Any                               | `portal` or `kwin` capture with `vulkan` encoding        |
 > | KDE Plasma          | No                | Non-Sandboxed                     | `portal` or `kwin` capture with `vaapi`/`nvenc` encoding |
@@ -165,12 +200,12 @@ Due to legal concerns, Mesa has disabled hardware decoding and encoding by defau
 Error: Could not open codec [h264_vaapi]: Function not implemented
 ```
 
-If you see the above error in the Sunshine logs, compiling *Mesa* manually may be required. See the official Mesa3D
+If you see the above error in the Apollo logs, compiling *Mesa* manually may be required. See the official Mesa3D
 [Compiling and Installing](https://docs.mesa3d.org/install.html) documentation for instructions.
 
 > [!IMPORTANT]
 > You must re-enable the disabled encoders. You can do so by passing the following argument to the build
-> system. You may also want to enable decoders, however, that is not required for Sunshine and is not covered here.
+> system. You may also want to enable decoders, however, that is not required for Apollo and is not covered here.
 > ```bash
 > -Dvideo-codecs=h264enc,h265enc
 > ```
@@ -181,13 +216,13 @@ If you see the above error in the Sunshine logs, compiling *Mesa* manually may b
 
 ### XDG Portal Capture Permissions
 
-Portal capture requires you to approve Remote Desktop permissions using an on-screen prompt on the host. Sunshine saves the
+Portal capture requires you to approve Remote Desktop permissions using an on-screen prompt on the host. Apollo saves the
 resulting restore token so the XDG Desktop Portal can reauthorize capture automatically on subsequent starts.
 
-If a restore token doesn't yet exist or becomes stale (for example, after a Sunshine crash, switching desktop environments,
-changing portal implementations, or changing the monitor associated with the Portal session), Sunshine will attempt to run
-in fallback capture mode. While in this mode, Sunshine will temporarily select another working capture method so that you
-can interact with the Portal Remote Desktop dialog. Once a new restore token is negotiated and saved, Sunshine will
+If a restore token doesn't yet exist or becomes stale (for example, after a Apollo crash, switching desktop environments,
+changing portal implementations, or changing the monitor associated with the Portal session), Apollo will attempt to run
+in fallback capture mode. While in this mode, Apollo will temporarily select another working capture method so that you
+can interact with the Portal Remote Desktop dialog. Once a new restore token is negotiated and saved, Apollo will
 automatically restart and switch back to Portal capture.
 
 > [!IMPORTANT]
@@ -195,28 +230,28 @@ automatically restart and switch back to Portal capture.
 > interact with the host or use an alternative Remote Desktop connection (e.g. VNC, RDP) to complete setup.
 
 If the saved Portal token is valid but you want to change the monitor associated with Portal capture, open the Web UI,
-open **Troubleshooting**, and select **Reset XDG Portal Capture**. Sunshine deletes the saved token and restarts.
+open **Troubleshooting**, and select **Reset XDG Portal Capture**. Apollo deletes the saved token and restarts.
 Approve the Remote Desktop prompt again and select the display to capture when it appears.
 
 > [!TIP]
-> If Sunshine uses a custom configuration directory, you may need to delete the `portal_token` file (which may
-> include a suffix such as .kde or .gnome) from the custom directory and restart Sunshine manually in lieu of the Web UI.
+> If Apollo uses a custom configuration directory, you may need to delete the `portal_token` file (which may
+> include a suffix such as .kde or .gnome) from the custom directory and restart Apollo manually in lieu of the Web UI.
 
 Users of the KDE Plasma desktop can bypass manual permission setup either by switching to `kwin` capture or setting
-the following configuration to enable permanent capture authorization for Sunshine via Portal capture:
+the following configuration to enable permanent capture authorization for Apollo via Portal capture:
 
 ```bash
 flatpak permission-set kde-authorized remote-desktop dev.lizardbyte.app.Sunshine yes
 ```
 > [!NOTE]
-> Although this configuration is plumbed through Flatpak, it will work with any supported Sunshine installation type.
+> Although this configuration is plumbed through Flatpak, it will work with any supported Apollo installation type.
 
 ### Input not working
 After installation, the `udev` rules need to be reloaded. Our post-install script tries to do this for you
 automatically, but if it fails, you may need to restart your system.
 
-Sunshine recreates virtual gamepad device nodes for each streaming session. Manual `chmod` or `setfacl`
-changes therefore disappear when the client reconnects. Confirm that the installed Sunshine rule contains the
+Apollo recreates virtual gamepad device nodes for each streaming session. Manual `chmod` or `setfacl`
+changes therefore disappear when the client reconnects. Confirm that the installed Apollo rule contains the
 parent-property import and `libvirtualhid/uhid/*` match, then reload it and reapply it to existing gamepad nodes:
 
 ```bash
@@ -236,25 +271,25 @@ sudo usermod -aG input $USER
 #### Multiseat
 
 If you run multiple concurrent Wayland sessions on separate logind seats (e.g. `seat0`, `seat1`),
-your compositor may ignore injected input unless Sunshine's virtual devices are assigned to the correct seat.
+your compositor may ignore injected input unless Apollo's virtual devices are assigned to the correct seat.
 
-Sunshine determines its target seat from `XDG_SEAT`, which is typically set automatically by your display manager.
-If needed, you can override it manually in your systemd service file or shell environment before starting Sunshine.
+Apollo determines its target seat from `XDG_SEAT`, which is typically set automatically by your display manager.
+If needed, you can override it manually in your systemd service file or shell environment before starting Apollo.
 
-When the seat is not `seat0`, Sunshine appends the seat name to its virtual device names, for example:
+When the seat is not `seat0`, Apollo appends the seat name to its virtual device names, for example:
 
 - libvirtualhid Keyboard (seat1)
 - libvirtualhid Mouse (seat1)
 - libvirtualhid Mouse (seat1) (Absolute)
-- Sunshine (libvirtualhid) X-Box 360 Controller (seat1)
+- Apollo (libvirtualhid) X-Box 360 Controller (seat1)
 
-Sunshine creates two mouse devices: a relative one and an absolute one.
+Apollo creates two mouse devices: a relative one and an absolute one.
 
 > [!NOTE]
 > PlayStation gamepads always use Sony's native product name (`Wireless Controller`) so that Steam recognizes them,
 > so they do not carry a seat suffix.
 
-To assign Sunshine's virtual devices to the correct seat, create this udev rules file
+To assign Apollo's virtual devices to the correct seat, create this udev rules file
 (/etc/udev/rules.d/72-sunshine-virtual-seat.rules):
 ```udev
 SUBSYSTEM=="input", KERNEL=="input*", ATTR{name}=="*(seat1)*", TAG+="seat", ENV{ID_SEAT}="seat1"
@@ -268,7 +303,7 @@ sudo udevadm control --reload-rules && sudo udevadm trigger -s input
 
 ### KMS Streaming fails
 KMS screencasting requires elevated privileges which are not allowed for Flatpak or AppImage packages.
-This means that you must install Sunshine using the native package format of your distribution, if available.
+This means that you must install Apollo using the native package format of your distribution, if available.
 KMS capture will soon be phased out in favour of XDG Portal Capture (which works with all package types).
 
 ### KMS Streaming; some windows flicker/disappear on KDE Plasma 6.5+
@@ -308,7 +343,7 @@ by running them with a special
 ```bash
 export AMD_DEBUG=lowlatencyenc
 ```
-Sunshine sets this variable automatically, no manual
+Apollo sets this variable automatically, no manual
 configuration is needed.
 
 To check whether low-latency mode is being used, one can watch the VCLK and DCLK
@@ -323,12 +358,12 @@ Some users have reported stuttering issues when streaming games running within G
 
 ### No gamepad detected
 Confirm **Enable Gamepad Input** is on under **Configuration > Input**. Install
-[Virtual HID Broker](https://github.com/LizardByte/libvirtualhid/releases/latest) separately from Sunshine,
+[Virtual HID Broker](https://github.com/LizardByte/libvirtualhid/releases/latest) separately from Apollo,
 using the macOS installer in its universal DMG. Confirm that `/Applications/VirtualHIDBroker.app` is allowed in
 **System Settings > Privacy & Security > Device Control and Data Access**, and activate a machine license under
-**Troubleshooting > Virtual HID Broker License** in Sunshine. The menu bar **Virtual HID Broker** submenu also
+**Troubleshooting > Virtual HID Broker License** in Apollo. The menu bar **Virtual HID Broker** submenu also
 shows license status and links for license management and downloads. If the broker or license is unavailable, the
-Troubleshooting page shows the broker response. Sunshine can show a startup notice when gamepad input is enabled
+Troubleshooting page shows the broker response. Apollo can show a startup notice when gamepad input is enabled
 and the broker or license is unavailable. Choose **None** under **Configuration > Input > Gamepad Backend** to disable
 virtual gamepads and that notice without affecting keyboard or mouse input. Reconnect the Moonlight session after choosing
 a different emulated gamepad profile.
@@ -347,23 +382,23 @@ launchctl load -w /Library/LaunchAgents/org.freedesktop.dbus-session.plist
 ## Windows
 
 ### No gamepad detected
-Sunshine supports two virtual gamepad backends on Windows. You can install the
+Apollo supports two virtual gamepad backends on Windows. You can install the
 [Virtual HID Broker](https://github.com/LizardByte/libvirtualhid/releases/latest) separately as an optional paid upgrade.
 Its Windows package includes a broker service and user-mode driver for a Raw Input keyboard and mouse plus full virtual
 gamepad support. ViGEmBus is a limited alternative for Xbox 360 and DualShock 4 support that has reached end of life. If you use the
 [ViGEmBus fallback](https://github.com/nefarius/ViGEmBus/releases/latest), you must use version 1.17 or newer.
 
-When Virtual HID Broker is used, Sunshine requires libvirtualhid version `2026.914.1218.10` or newer.
+When Virtual HID Broker is used, Apollo requires libvirtualhid version `2026.914.1218.10` or newer.
 
 Virtual HID Broker adds Xbox One, Xbox Series, DualSense, Nintendo Switch Pro, and Generic gamepads, plus advanced
 controller features such as motion, touchpads, LEDs, and adaptive triggers when supported. Unlike the discontinued
 ViGEmBus project, Virtual HID Broker is actively developed and supported by the LizardByte team.
 
-An active paid Virtual HID Broker machine license is required before Sunshine can create driver-backed libvirtualhid
+An active paid Virtual HID Broker machine license is required before Apollo can create driver-backed libvirtualhid
 devices, including gamepads and the Raw Input keyboard and mouse. Use the message on the Web UI home page, the startup
 tray notification, or **Get/Manage License** in the **Virtual HID Broker** tray submenu to open the license section on
 the Troubleshooting page. In **Configuration > Input**, select **All Available Drivers**, only **Virtual HID Broker**, or
-only **ViGEmBus**. Sunshine keeps prompting until this setting is saved, but automatically selects **All Available
+only **ViGEmBus**. Apollo keeps prompting until this setting is saved, but automatically selects **All Available
 Drivers** when it detects an existing active Virtual HID Broker license. Whenever the Virtual HID Broker license is not
 valid, **All Available Drivers** falls back to a compatible ViGEmBus installation for Xbox 360 and DualShock 4 gamepads
 and to SendInput for keyboard and mouse. Selecting only **ViGEmBus** suppresses Virtual HID Broker startup notifications
@@ -373,27 +408,27 @@ gamepads and suppresses broker and driver choice notices without affecting keybo
 After installation, it is recommended to restart your computer.
 
 ### Games do not detect keyboard input
-With a compatible Virtual HID Broker and active license, Sunshine sends normal key transitions through a real HID
+With a compatible Virtual HID Broker and active license, Apollo sends normal key transitions through a real HID
 keyboard so games using Raw Input can receive them. Unicode text input and keys outside the supported HID keyboard
 page continue to use Windows input injection. When the driver-backed keyboard cannot be created because the driver,
 broker, or license is unavailable, libvirtualhid falls back to SendInput.
 
-Check the libvirtualhid driver version and Virtual HID Broker license on the Web UI Troubleshooting page. Sunshine recreates the
+Check the libvirtualhid driver version and Virtual HID Broker license on the Web UI Troubleshooting page. Apollo recreates the
 shared keyboard and mouse after a successful license activation, validation, or deactivation, so you do not need to
-restart Sunshine merely to switch between the HID and SendInput paths.
+restart Apollo merely to switch between the HID and SendInput paths.
 
 ### Games do not detect mouse input
-With a compatible Virtual HID Broker and active license, Sunshine sends relative mouse movement, buttons, and scrolling
+With a compatible Virtual HID Broker and active license, Apollo sends relative mouse movement, buttons, and scrolling
 through a real HID device so games using Raw Input can receive them. Absolute positioning still uses Windows input
 injection. When the driver-backed mouse cannot be created, libvirtualhid falls back to SendInput; the Windows cursor may
 still move even though a game that listens only for Raw Input receives nothing.
 
 Check the libvirtualhid driver version and Virtual HID Broker license on the Web UI Troubleshooting page even when controller input
 is disabled. The same live refresh used by the keyboard path also switches the mouse between HID and SendInput without
-requiring a Sunshine restart.
+requiring a Apollo restart.
 
 ### Permission denied
-Since Sunshine runs as a service on Windows, it may not have the same level of access that your regular user account
+Since Apollo runs as a service on Windows, it may not have the same level of access that your regular user account
 has. You may get permission denied errors when attempting to launch a game or application from a non-system drive.
 
 You will need to modify the security permissions on your disk. Ensure that user/principal SYSTEM has full

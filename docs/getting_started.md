@@ -1,14 +1,37 @@
 # Getting Started
 
-The recommended method for running Sunshine is to use the [binaries](#binaries) included in the
+> [!NOTE]
+> Apollo is based on the Sunshine 2026 codebase. This guide inherits upstream installation
+> instructions. Commands, package names, and paths that still use `sunshine`/`Sunshine` are
+> the compatible binary or artifact identifiers; Apollo-specific behavior is documented
+> below and in the [Apollo Wiki](https://github.com/ClassicOldSong/Apollo/wiki).
+
+The recommended method for running Apollo is to use the [binaries](#binaries) included in the
 [latest release][latest-release], unless otherwise specified.
 
-[Pre-releases](https://github.com/SunshineStream/Sunshine/releases) are also available. These should be considered beta,
+[Pre-releases](https://github.com/ClassicOldSong/Apollo/releases) are also available. These should be considered beta,
 and release artifacts may be missing when merging changes on a faster cadence.
+
+## Apollo-specific features
+
+Apollo keeps the Sunshine 2026 streaming core and adds:
+
+- **Virtual display** with SudoVDA on Windows, including automatic client resolution,
+  refresh-rate matching, HDR support, and per-client display persistence.
+- **Per-client permissions** for input, clipboard, file transfer, server commands, and app
+  actions. The first paired client receives full permissions; later clients receive a
+  restricted default set.
+- **Device management** in the Web UI (`Clients` page) for editing permissions, display mode
+  overrides, virtual-display policy, and client connect/disconnect commands.
+- **App launch and close** from the Web UI, plus per-app virtual display, app identity,
+  resolution scale factor, gamepad override, and resume/pause commands.
+- **OTP pairing** for Artemis clients, in addition to standard PIN pairing.
+- **Global prep/state/server commands** and Apollo audio/video options exposed in the
+  configuration UI.
 
 ## Binaries
 
-Binaries of Sunshine are created for each release. They are available for FreeBSD, Linux, macOS, and Windows.
+Binaries of Apollo are created for each release. They are available for FreeBSD, Linux, macOS, and Windows.
 Binaries can be found in the [latest release][latest-release].
 
 > [!NOTE]
@@ -17,6 +40,11 @@ Binaries can be found in the [latest release][latest-release].
 > No support will be provided for third party packages!
 
 ## Install
+
+> [!NOTE]
+> The install examples below are inherited from Sunshine. Apollo release assets may use
+> `Apollo-*` names instead of the upstream `Sunshine-*` names shown here. Always verify the
+> exact asset name on the [Apollo releases page](https://github.com/ClassicOldSong/Apollo/releases).
 
 ### Docker
 
@@ -60,9 +88,9 @@ available for manual download from each GitHub release.
 CUDA is used for NVFBC capture and direct GPU-memory NVENC encoding.
 
 > [!IMPORTANT]
-> CUDA support is selected when Sunshine is compiled. If you build Sunshine for an NVIDIA GPU yourself, including
-> through the AUR or for a third-party repository such as Omarchy, install the CUDA Toolkit before building Sunshine.
-> Installing CUDA after Sunshine has been compiled does not add CUDA support; Sunshine must be rebuilt.
+> CUDA support is selected when Apollo is compiled. If you build Apollo for an NVIDIA GPU yourself, including
+> through the AUR or for a third-party repository such as Omarchy, install the CUDA Toolkit before building Apollo.
+> Installing CUDA after Apollo has been compiled does not add CUDA support; Apollo must be rebuilt.
 >
 > This requirement does not apply when installing a prebuilt package supplied by LizardByte. In particular, the
 > Arch Linux package from LizardByte's [pacman-repo](https://github.com/LizardByte/pacman-repo) is already built with
@@ -160,7 +188,7 @@ apk del sunshine
 > Use AUR packages at your own risk.
 
 > [!IMPORTANT]
-> NVIDIA users installing Sunshine from LizardByte's pacman-repo do not need the CUDA Toolkit. If Sunshine is compiled
+> NVIDIA users installing Apollo from LizardByte's pacman-repo do not need the CUDA Toolkit. If Apollo is compiled
 > locally from the AUR or by another package provider, such as Omarchy, the builder must install the CUDA Toolkit before
 > compilation. Installing CUDA after the package was built cannot enable CUDA support in that package.
 
@@ -206,7 +234,7 @@ automatically selects the appropriate Debian or Ubuntu release.
     ```}
 }
 
-Install Sunshine after configuring the repository.
+Install Apollo after configuring the repository.
 
 ```bash
 sudo apt update
@@ -221,7 +249,7 @@ sudo apt install ./sunshine_{version}-1+{distro}{distro-version}_{arch}.deb
 ```
 
 > [!NOTE]
-> The `{version}` is the Sunshine version. The `1+{distro}{distro-version}` suffix is the Debian package revision and
+> The `{version}` is the Apollo version. The `1+{distro}{distro-version}` suffix is the Debian package revision and
 > identifies the distro used to build it. The `{arch}` is the architecture of your operating system.
 
 > [!TIP]
@@ -251,7 +279,7 @@ automatically selects Fedora or openSUSE and the appropriate release.
     ```}
 }
 
-Install Sunshine with your distribution's package manager.
+Install Apollo with your distribution's package manager.
 
 @tabs_grouped{distribution|:|
   @tab{ Fedora |:| ```bash
@@ -276,7 +304,7 @@ Download `Sunshine-{version}-1.{distro+version}.{arch}.rpm` and run the followin
 }
 
 > [!NOTE]
-> The `{version}` is the Sunshine version. The `1` is the RPM package release. The `{distro+version}` is the distro and
+> The `{version}` is the Apollo version. The `1` is the RPM package release. The `{distro+version}` is the distro and
 > distro version of the distro we built the package on. The `{arch}` is the architecture of your operating system.
 
 > [!TIP]
@@ -412,11 +440,11 @@ To use gamepads, download the macOS universal libvirtualhid DMG from the link ab
 **Install libvirtualhid.command** to install Virtual HID Broker. In **System Settings > Privacy & Security >
 Device Control and Data Access**, add `/Applications/VirtualHIDBroker.app` and enable it. Restart the broker if
 you changed this permission with `sudo launchctl kickstart -k system/dev.lizardbyte.app.libvirtualhid`.
-Activate the machine license in Sunshine’s
+Activate the machine license in Apollo's
 **Troubleshooting > Virtual HID Broker License** section. In **Configuration > Input**, turn on **Enable Gamepad Input**
 and choose the emulated gamepad. The Gamepad Backend setting can be set to **None** to disable gamepads without affecting
-keyboard or mouse input. Sunshine’s menu bar **Virtual HID Broker** submenu shows the license status and links
-for license management and downloads. Sunshine’s DMG does not contain the broker. Keyboard and mouse input use the
+keyboard or mouse input. Apollo's menu bar **Virtual HID Broker** submenu shows the license status and links
+for license management and downloads. Apollo's DMG does not contain the broker. Keyboard and mouse input use the
 standard macOS synthetic-input permission path.
 
 #### DMG
@@ -433,12 +461,12 @@ Prebuilt DMG packages require macOS 15.0 (Sequoia) or newer.
    | x86_64 (Intel)        | [Sunshine-macOS-x86_64.dmg](https://github.com/SunshineStream/Sunshine/releases/latest/download/Sunshine-macOS-x86_64.dmg) |
 
 2. Open the downloaded `.dmg` file.
-3. Drag `Sunshine.app` into the `Applications` folder.
+3. Drag `Apollo.app` into the `Applications` folder.
 4. Eject the disk image.
 
 ##### Uninstall
-1. Quit Sunshine if it is running.
-2. Open `Finder`, navigate to `Applications`, and drag `Sunshine.app` to the Trash.
+1. Quit Apollo if it is running.
+2. Open `Finder`, navigate to `Applications`, and drag `Apollo.app` to the Trash.
 
 #### Homebrew
 This package requires that you have [Homebrew](https://docs.brew.sh/Installation) installed.
@@ -462,7 +490,7 @@ brew uninstall sunshine
 ### Windows
 
 > [!NOTE]
-> Sunshine supports ARM64 on Windows; however, this should be considered experimental. This version does not properly
+> Apollo supports ARM64 on Windows; however, this should be considered experimental. This version does not properly
 > support GPU scheduling and any hardware acceleration.
 
 #### Installer (recommended)
@@ -486,7 +514,7 @@ brew uninstall sunshine
 > You should carefully select or unselect the options you want to install. Do not blindly install or
 > enable features.
 
-To uninstall, find Sunshine in the list <a href="ms-settings:installed-apps">here</a> and select "Uninstall" from the
+To uninstall, find Apollo in the list <a href="ms-settings:installed-apps">here</a> and select "Uninstall" from the
 overflow menu. Different versions of Windows may provide slightly different steps for uninstall.
 
 #### Standalone (lite version)
@@ -570,10 +598,10 @@ systemctl --user --now enable app-dev.lizardbyte.app.Sunshine
 > XDG Desktop Portal, but it is also aliased to "sunshine.service" for convenience.
 
 ### macOS
-On first launch, Sunshine requests Screen Recording and keyboard and mouse control when those features are enabled.
+On first launch, Apollo requests Screen Recording and keyboard and mouse control when those features are enabled.
 It also requests Microphone access if you configured a custom **Audio Sink**, and optional Notifications access when
 the system tray is enabled. Open **Troubleshooting > Permissions** in the Web UI to review these permissions or
-open their System Settings pages. Sunshine restarts once after missing required permissions are granted, including
+open their System Settings pages. Apollo restarts once after missing required permissions are granted, including
 when a permission was removed and later restored.
 If macOS offers **Quit & Reopen** after you allow Screen Recording, choose it so the running process receives the new
 access. Sunshine exits its tray and server threads before macOS reopens it.
@@ -821,4 +849,4 @@ Guides are available [here](guides.md).
 Tutorials and Guides are community generated. Want to contribute? Reach out to us on our discord server.}
 
 
-[latest-release]: https://github.com/SunshineStream/Sunshine/releases/latest
+[latest-release]: https://github.com/ClassicOldSong/Apollo/releases/latest

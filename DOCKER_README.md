@@ -1,5 +1,10 @@
 # Docker
 
+> [!NOTE]
+> These Docker instructions are inherited from upstream Sunshine and use the LizardByte
+> `sunshine` images/build arguments. Apollo-specific container images are not published by
+> this repository; adapt the image names if you build an Apollo container yourself.
+
 ## Important note
 Starting with v0.18.0, tag names have changed. You may no longer use `latest`, `master`, `vX.X.X`.
 

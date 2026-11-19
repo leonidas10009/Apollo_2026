@@ -1,6 +1,7 @@
 # API
 
-Sunshine has a RESTful API which can be used to interact with the service.
+Apollo has a RESTful API which can be used to interact with the service. Apollo keeps the
+Sunshine 2026 endpoints and adds Apollo-specific client, app, OTP, and quit endpoints.
 
 Unless otherwise specified, authentication is required for all API calls. You can authenticate using
 basic authentication with the admin username and password.
@@ -46,6 +47,9 @@ curl -u user:pass -H "X-CSRF-Token: your_token_here" \
 ## POST /api/apps/close
 @copydoc confighttp::closeApp()
 
+## POST /api/apps/launch
+@copydoc confighttp::launchApp()
+
 ## DELETE /api/apps/{index}
 @copydoc confighttp::deleteApp()
 
@@ -63,6 +67,12 @@ curl -u user:pass -H "X-CSRF-Token: your_token_here" \
 
 ## POST /api/clients/update
 @copydoc confighttp::updateClient()
+
+## POST /api/clients/update-details
+@copydoc confighttp::updateClientDetails()
+
+## POST /api/clients/disconnect
+@copydoc confighttp::disconnectClient()
 
 ## GET /api/config
 @copydoc confighttp::getConfig()
@@ -85,8 +95,17 @@ curl -u user:pass -H "X-CSRF-Token: your_token_here" \
 ## POST /api/password
 @copydoc confighttp::savePassword()
 
+## GET /api/pin
+@copydoc confighttp::getPendingPairings()
+
 ## POST /api/pin
 @copydoc confighttp::savePin()
+
+## DELETE /api/pin
+@copydoc confighttp::cancelPairing()
+
+## POST /api/otp
+@copydoc confighttp::getOTP()
 
 ## POST /api/reset-display-device-persistence
 @copydoc confighttp::resetDisplayDevicePersistence()
@@ -97,5 +116,20 @@ curl -u user:pass -H "X-CSRF-Token: your_token_here" \
 ## POST /api/restart
 @copydoc confighttp::restart()
 
+## POST /api/quit
+@copydoc confighttp::quit()
+
+## GET /api/permissions
+@copydoc confighttp::getPermissions()
+
+## POST /api/permissions/request
+@copydoc confighttp::requestPermission()
+
 ## GET /api/virtual-input/status
 @copydoc confighttp::getVirtualInputStatus()
+
+## GET /api/virtual-input/license
+@copydoc confighttp::getVirtualInputLicense()
+
+## POST /api/virtual-input/license
+@copydoc confighttp::updateVirtualInputLicense()

@@ -1,7 +1,12 @@
 # Third-Party Packages
 
+> [!NOTE]
+> This list is inherited from upstream Sunshine. These packages target Sunshine and may not
+> contain Apollo-specific changes. Check the package metadata before installing it on an Apollo
+> host.
+
 > [!WARNING]
-> These packages are not maintained by LizardByte. Use at your own risk.
+> These packages are not maintained by the Apollo project or LizardByte. Use at your own risk.
 
 ## Chocolatey
 [![Chocolatey](https://img.shields.io/badge/dynamic/xml.svg?color=orange&label=chocolatey&style=for-the-badge&prefix=v&query=%2F%2Ftr%5B%40id%3D%27chocolatey%27%5D%2Ftd%5B3%5D%2Fspan%2Fa&url=https%3A%2F%2Frepology.org%2Fproject%2Fsunshine%2Fversions&logo=chocolatey)](https://community.chocolatey.org/packages/sunshine)

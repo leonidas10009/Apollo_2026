@@ -1,5 +1,10 @@
 # Configuration
 
+> [!NOTE]
+> Apollo is based on Sunshine 2026. This document inherits upstream option names and
+> compatibility paths. Options marked as Apollo-specific below are provided by Apollo.
+> The `sunshine_name` option and `sunshine` config paths are kept for compatibility.
+
 @admonition{ Host authority |:| @htmlonly
 By providing the host authority (URI + port), you can easily open each configuration option in the config UI.
 <br>
@@ -8,10 +13,11 @@ By providing the host authority (URI + port), you can easily open each configura
 @endhtmlonly
 }
 
-Sunshine will work with the default settings for most users. In some cases you may want to configure Sunshine further.
+Apollo will work with the default settings for most users. In some cases you may want to configure Apollo further.
 
 The default location for the configuration file is listed below. You can use another location if you
-choose, by passing in the full configuration file path as the first argument when you start Sunshine.
+choose, by passing in the full configuration file path as the first argument when you start Apollo.
+The default paths use `sunshine` for compatibility with the upstream codebase and existing installations.
 
 **Example**
 ```bash
@@ -29,9 +35,9 @@ location by modifying the configuration file.
 | FreeBSD | @code{}~/.config/sunshine@endcode               |
 | Linux   | @code{}~/.config/sunshine@endcode               |
 | macOS   | @code{}~/.config/sunshine@endcode               |
-| Windows | @code{}%ProgramFiles%\\Sunshine\\config@endcode |
+| Windows | @code{}%ProgramFiles%\\Apollo\\config@endcode |
 
-Although it is recommended to use the configuration UI, it is possible manually configure Sunshine by
+Although it is recommended to use the configuration UI, it is possible to manually configure Apollo by
 editing the `conf` file in a text editor. Use the examples as reference.
 
 The web UI groups these settings into the sidebar categories documented below. Encoder categories are shown only when
@@ -40,12 +46,12 @@ supported on the current platform.
 ## Permissions on every platform
 
 Open **Troubleshooting > Permissions** in the Web UI to see required and optional access for the current platform.
-The Home page flags verifiable required access that is missing. Sunshine checks for access granted while it is running
+The Home page flags verifiable required access that is missing. Apollo checks for access granted while it is running
 and restarts once after all verifiable required access is available. On Unix, adding a user to a group takes effect only
-after a new login session; Sunshine cannot detect the new group membership in the existing process.
+after a new login session; Apollo cannot detect the new group membership in the existing process.
 
 On Linux and FreeBSD, virtual keyboard, mouse, and gamepad input need read and write access to `/dev/uinput` (Linux
-also checks `/dev/input/uinput`). The Web UI shows setup steps if that access is missing. On Windows, Sunshine checks
+also checks `/dev/input/uinput`). The Web UI shows setup steps if that access is missing. On Windows, Apollo checks
 whether its account can list and create files in the `config` directory beside the executable. Windows provides no
 consent prompt for directory ACLs, so the Web UI shows setup steps for correcting access.
 
@@ -57,7 +63,7 @@ consent prompt for directory ACLs, so the Web UI shows setup steps for correctin
     <tr>
         <td>Description</td>
         <td colspan="2">
-            The locale used for Sunshine's user interface.
+            The locale used for Apollo's user interface.
         </td>
     </tr>
     <tr>
@@ -171,7 +177,7 @@ consent prompt for directory ACLs, so the Web UI shows setup steps for correctin
     <tr>
         <td>Example</td>
         <td colspan="2">@code{}
-            sunshine_name = Sunshine
+            sunshine_name = Apollo
             @endcode</td>
     </tr>
 </table>
@@ -254,13 +260,63 @@ consent prompt for directory ACLs, so the Web UI shows setup steps for correctin
     </tr>
 </table>
 
+### global_state_cmd
+
+<table>
+    <tr>
+        <td>Description</td>
+        <td colspan="2">
+            A list of commands to run when any application resumes or pauses.
+            Use the <b>do</b> command for resume (first client connects when no clients are
+            connected) and the <b>undo</b> command for pause (all clients disconnect).
+            The pause command is not executed when the session terminates.
+        </td>
+    </tr>
+    <tr>
+        <td>Default</td>
+        <td colspan="2">@code{}
+            []
+            @endcode</td>
+    </tr>
+    <tr>
+        <td>Example</td>
+        <td colspan="2">@code{}
+            global_state_cmd = [{"do":"nircmd.exe monitor:on","elevated":true,"undo":"nircmd.exe monitor:off"}]
+            @endcode</td>
+    </tr>
+</table>
+
+### server_cmd
+
+<table>
+    <tr>
+        <td>Description</td>
+        <td colspan="2">
+            A list of named commands that can be executed from the client during streaming.
+            Each entry has a <b>name</b>, a <b>cmd</b>, and an optional <b>elevated</b> flag.
+        </td>
+    </tr>
+    <tr>
+        <td>Default</td>
+        <td colspan="2">@code{}
+            []
+            @endcode</td>
+    </tr>
+    <tr>
+        <td>Example</td>
+        <td colspan="2">@code{}
+            server_cmd = [{"name":"Bubbles","cmd":"bubbles.scr","elevated":false}]
+            @endcode</td>
+    </tr>
+</table>
+
 ### notify_pre_releases
 
 <table>
     <tr>
         <td>Description</td>
         <td colspan="2">
-            Whether to be notified of new pre-release versions of Sunshine.
+            Whether to be notified of new pre-release versions of Apollo.
         </td>
     </tr>
     <tr>
@@ -302,6 +358,77 @@ consent prompt for directory ACLs, so the Web UI shows setup steps for correctin
 
 ## Input
 
+### hide_tray_controls
+
+<table>
+    <tr>
+        <td>Description</td>
+        <td colspan="2">
+            Hide the <b>Force Stop</b>, <b>Restart</b>, and <b>Quit</b> actions from the
+            system tray menu.
+        </td>
+    </tr>
+    <tr>
+        <td>Default</td>
+        <td colspan="2">@code{}
+            disabled
+            @endcode</td>
+    </tr>
+    <tr>
+        <td>Example</td>
+        <td colspan="2">@code{}
+            hide_tray_controls = enabled
+            @endcode</td>
+    </tr>
+</table>
+
+### enable_pairing
+
+<table>
+    <tr>
+        <td>Description</td>
+        <td colspan="2">
+            Allow Moonlight/Artemis clients to pair with this host.
+        </td>
+    </tr>
+    <tr>
+        <td>Default</td>
+        <td colspan="2">@code{}
+            enabled
+            @endcode</td>
+    </tr>
+    <tr>
+        <td>Example</td>
+        <td colspan="2">@code{}
+            enable_pairing = disabled
+            @endcode</td>
+    </tr>
+</table>
+
+### enable_discovery
+
+<table>
+    <tr>
+        <td>Description</td>
+        <td colspan="2">
+            Advertise the host for automatic discovery. When disabled, clients must enter the
+            host IP address manually.
+        </td>
+    </tr>
+    <tr>
+        <td>Default</td>
+        <td colspan="2">@code{}
+            enabled
+            @endcode</td>
+    </tr>
+    <tr>
+        <td>Example</td>
+        <td colspan="2">@code{}
+            enable_discovery = disabled
+            @endcode</td>
+    </tr>
+</table>
+
 ### controller
 
 <table>
@@ -325,14 +452,63 @@ consent prompt for directory ACLs, so the Web UI shows setup steps for correctin
     </tr>
 </table>
 
+### enable_input_only_mode
+
+<table>
+    <tr>
+        <td>Description</td>
+        <td colspan="2">
+            Add an <b>Input Only</b> app entry. While streaming, the app list shows only the
+            running app and the Input Only entry. The Input Only entry receives no image or
+            audio, which is useful for controlling a TV or passing through peripherals that the
+            TV does not support.
+        </td>
+    </tr>
+    <tr>
+        <td>Default</td>
+        <td colspan="2">@code{}
+            disabled
+            @endcode</td>
+    </tr>
+    <tr>
+        <td>Example</td>
+        <td colspan="2">@code{}
+            enable_input_only_mode = enabled
+            @endcode</td>
+    </tr>
+</table>
+
+### forward_rumble
+
+<table>
+    <tr>
+        <td>Description</td>
+        <td colspan="2">
+            Forward rumble messages from the host to connected clients.
+        </td>
+    </tr>
+    <tr>
+        <td>Default</td>
+        <td colspan="2">@code{}
+            enabled
+            @endcode</td>
+    </tr>
+    <tr>
+        <td>Example</td>
+        <td colspan="2">@code{}
+            forward_rumble = disabled
+            @endcode</td>
+    </tr>
+</table>
+
 ### gamepad_driver
 
 <table>
     <tr>
         <td>Description</td>
         <td colspan="2">
-            Controls which virtual gamepad backend Sunshine may use on Windows and macOS. On Windows, the Web UI and
-            startup notification request a choice while this option is not set. If Sunshine detects an active Virtual
+            Controls which virtual gamepad backend Apollo may use on Windows and macOS. On Windows, the Web UI and
+            startup notification request a choice while this option is not set. If Apollo detects an active Virtual
             HID Broker license on Windows, it automatically sets this option to `all` when it is missing.
             @warning{ViGEmBus has limited gamepad features, supports only Xbox 360 and DualShock 4 emulation, and has
             reached end of life. Selecting `vigembus` also suppresses Virtual HID Broker startup notifications.}
@@ -377,7 +553,7 @@ consent prompt for directory ACLs, so the Web UI shows setup steps for correctin
         <td>Description</td>
         <td colspan="2">
             The type of gamepad to emulate on the host. Automatic selection uses the controller type
-            reported by the client. If the type is unknown, Sunshine can select a PlayStation-style
+            reported by the client. If the type is unknown, Apollo can select a PlayStation-style
             controller from reported motion or touchpad support; otherwise it uses an Xbox-style controller.
             @note{When gamepad_driver is `vigembus` on Windows, only auto, x360, and ds4 are available.}
         </td>
@@ -662,7 +838,7 @@ consent prompt for directory ACLs, so the Web UI shows setup steps for correctin
     <tr>
         <td>Description</td>
         <td colspan="2">It may be possible that you cannot send the Windows Key from Moonlight directly. In those cases it may be useful to
-            make Sunshine think the Right Alt key is the Windows key.
+            make Apollo think the Right Alt key is the Windows key.
             </td>
     </tr>
     <tr>
@@ -708,7 +884,7 @@ consent prompt for directory ACLs, so the Web UI shows setup steps for correctin
     <tr>
         <td>Description</td>
         <td colspan="2">
-            When enabled, Sunshine will pass through high resolution scroll events from Moonlight clients.
+            When enabled, Apollo will pass through high resolution scroll events from Moonlight clients.
             <br>
             This can be useful to disable for older applications that scroll too fast with high resolution scroll
             events.
@@ -734,7 +910,7 @@ consent prompt for directory ACLs, so the Web UI shows setup steps for correctin
     <tr>
         <td>Description</td>
         <td colspan="2">
-            When enabled, Sunshine will pass through native pen/touch events from Moonlight clients.
+            When enabled, Apollo will pass through native pen/touch events from Moonlight clients.
             <br>
             This can be useful to disable for older applications without native pen/touch support.
         </td>
@@ -819,7 +995,7 @@ consent prompt for directory ACLs, so the Web UI shows setup steps for correctin
             <br>
             **macOS:**
             <br>
-            Sunshine can only access microphones on macOS due to system limitations.
+            Apollo can only access microphones on macOS due to system limitations.
             To stream system audio use
             [Soundflower](https://github.com/mattingalls/Soundflower) or
             [BlackHole](https://github.com/ExistentialAudio/BlackHole).
@@ -829,7 +1005,7 @@ consent prompt for directory ACLs, so the Web UI shows setup steps for correctin
             <br>
             Enter the following command in command prompt or PowerShell.
             @code{}
-            %ProgramFiles%\Sunshine\tools\audio-info.exe
+            %ProgramFiles%\Apollo\tools\audio-info.exe
             @endcode
             If you have multiple audio devices with identical names, use the Device ID instead.
             }
@@ -839,7 +1015,7 @@ consent prompt for directory ACLs, so the Web UI shows setup steps for correctin
     </tr>
     <tr>
         <td>Default</td>
-        <td colspan="2">Sunshine will select the default audio device.</td>
+        <td colspan="2">Apollo will select the default audio device.</td>
     </tr>
     <tr>
         <td>Example (FreeBSD/Linux)</td>
@@ -867,7 +1043,7 @@ consent prompt for directory ACLs, so the Web UI shows setup steps for correctin
     <tr>
         <td>Description</td>
         <td colspan="2">
-            The audio device that's virtual, like Steam Streaming Speakers. This allows Sunshine to stream audio,
+            The audio device that's virtual, like Steam Streaming Speakers. This allows Apollo to stream audio,
             while muting the speakers.
             @tip{See [audio_sink](#audio_sink)!}
             @tip{These are some options for virtual sound devices.
@@ -887,6 +1063,54 @@ consent prompt for directory ACLs, so the Web UI shows setup steps for correctin
         <td>Example</td>
         <td colspan="2">@code{}
             virtual_sink = Steam Streaming Speakers
+            @endcode</td>
+    </tr>
+</table>
+
+### keep_sink_default
+
+<table>
+    <tr>
+        <td>Description</td>
+        <td colspan="2">
+            Force the selected virtual sink to remain the default audio device. This is
+            effective when host audio output is disabled.
+        </td>
+    </tr>
+    <tr>
+        <td>Default</td>
+        <td colspan="2">@code{}
+            enabled
+            @endcode</td>
+    </tr>
+    <tr>
+        <td>Example</td>
+        <td colspan="2">@code{}
+            keep_sink_default = disabled
+            @endcode</td>
+    </tr>
+</table>
+
+### auto_capture_sink
+
+<table>
+    <tr>
+        <td>Description</td>
+        <td colspan="2">
+            Automatically capture the current default audio sink after the host default audio
+            device changes.
+        </td>
+    </tr>
+    <tr>
+        <td>Default</td>
+        <td colspan="2">@code{}
+            enabled
+            @endcode</td>
+    </tr>
+    <tr>
+        <td>Example</td>
+        <td colspan="2">@code{}
+            auto_capture_sink = disabled
             @endcode</td>
     </tr>
 </table>
@@ -947,7 +1171,7 @@ consent prompt for directory ACLs, so the Web UI shows setup steps for correctin
         <td colspan="2">
             Enables capture-only operation when an external audio router manages application playback.
             An explicit [audio_sink](#audio_sink) is required; use an endpoint ID when names are ambiguous.
-            Sunshine captures that endpoint directly without changing or restoring Windows default devices
+            Apollo captures that endpoint directly without changing or restoring Windows default devices
             or endpoint formats.
             <br>
             <br>
@@ -992,7 +1216,7 @@ consent prompt for directory ACLs, so the Web UI shows setup steps for correctin
             vainfo --display drm --device /dev/dri/renderD129 | \
               grep -E "((VAProfileH264High|VAProfileHEVCMain|VAProfileHEVCMain10).*VAEntrypointEncSlice)|Driver version"
             @endcode
-            To be supported by Sunshine, it needs to have at the very minimum:
+            To be supported by Apollo, it needs to have at the very minimum:
             `VAProfileH264High   : VAEntrypointEncSlice`
             <br>
             <br>
@@ -1000,7 +1224,7 @@ consent prompt for directory ACLs, so the Web UI shows setup steps for correctin
             <br>
             Enter the following command in command prompt or PowerShell.
             @code{}
-            %ProgramFiles%\Sunshine\tools\dxgi-info.exe
+            %ProgramFiles%\Apollo\tools\dxgi-info.exe
             @endcode
             For hybrid graphics systems, DXGI reports the outputs are connected to whichever graphics
             adapter that the application is configured to use, so it's not a reliable indicator of how the
@@ -1010,7 +1234,7 @@ consent prompt for directory ACLs, so the Web UI shows setup steps for correctin
     </tr>
     <tr>
         <td>Default</td>
-        <td colspan="2">Sunshine will select the default video card.</td>
+        <td colspan="2">Apollo will select the default video card.</td>
     </tr>
     <tr>
         <td>Example (FreeBSD/Linux)</td>
@@ -1038,7 +1262,7 @@ consent prompt for directory ACLs, so the Web UI shows setup steps for correctin
             <br>
             **FreeBSD/Linux:**
             <br>
-            During Sunshine startup, you should see the list of detected displays:
+            During Apollo startup, you should see the list of detected displays:
             @code{}
             Info: Detecting displays
             Info: Detected display: DVI-D-0 (id: 0) connected: false
@@ -1053,7 +1277,7 @@ consent prompt for directory ACLs, so the Web UI shows setup steps for correctin
             <br>
             **macOS:**
             <br>
-            During Sunshine startup, you should see the list of detected displays:
+            During Apollo startup, you should see the list of detected displays:
             @code{}
             Info: Detecting displays
             Info: Detected display: Monitor-0 (id: 3) connected: true
@@ -1064,7 +1288,7 @@ consent prompt for directory ACLs, so the Web UI shows setup steps for correctin
             <br>
             **Windows:**
             <br>
-            During Sunshine startup, you should see the list of detected displays:
+            During Apollo startup, you should see the list of detected displays:
             @code{}
             Info: Currently available display devices:
             [
@@ -1077,7 +1301,7 @@ consent prompt for directory ACLs, so the Web UI shows setup steps for correctin
               {
                 "device_id": "{77f67f3e-754f-5d31-af64-ee037e18100a}",
                 "display_name": "",
-                "friendly_name": "SunshineHDR",
+                "friendly_name": "ApolloHDR",
                 "info": null
               },
               {
@@ -1119,7 +1343,7 @@ consent prompt for directory ACLs, so the Web UI shows setup steps for correctin
     </tr>
     <tr>
         <td>Default</td>
-        <td colspan="2">Sunshine will select the default display.</td>
+        <td colspan="2">Apollo will select the default display.</td>
     </tr>
     <tr>
         <td>Example (FreeBSD/Linux)</td>
@@ -1161,6 +1385,79 @@ consent prompt for directory ACLs, so the Web UI shows setup steps for correctin
     </tr>
 </table>
 
+
+### fallback_mode
+
+<table>
+    <tr>
+        <td>Description</td>
+        <td colspan="2">
+            Display mode used when the client does not request one or when an app is launched
+            from the Web UI. Format: <code>[Width]x[Height]x[FPS]</code>.
+            @note{Applies to Windows virtual display only.}
+        </td>
+    </tr>
+    <tr>
+        <td>Default</td>
+        <td colspan="2">@code{}
+            1920x1080x60
+            @endcode</td>
+    </tr>
+    <tr>
+        <td>Example</td>
+        <td colspan="2">@code{}
+            fallback_mode = 2560x1440x120
+            @endcode</td>
+    </tr>
+</table>
+
+### headless_mode
+
+<table>
+    <tr>
+        <td>Description</td>
+        <td colspan="2">
+            Start Apollo in headless mode. When enabled, apps start on a virtual display even
+            when no physical display is connected.
+        </td>
+    </tr>
+    <tr>
+        <td>Default</td>
+        <td colspan="2">@code{}
+            disabled
+            @endcode</td>
+    </tr>
+    <tr>
+        <td>Example</td>
+        <td colspan="2">@code{}
+            headless_mode = enabled
+            @endcode</td>
+    </tr>
+</table>
+
+### double_refreshrate
+
+<table>
+    <tr>
+        <td>Description</td>
+        <td colspan="2">
+            Double the requested refresh rate when creating a virtual display. The streamed
+            refresh rate remains unchanged. This can improve stutter on some systems.
+        </td>
+    </tr>
+    <tr>
+        <td>Default</td>
+        <td colspan="2">@code{}
+            disabled
+            @endcode</td>
+    </tr>
+    <tr>
+        <td>Example</td>
+        <td colspan="2">@code{}
+            double_refreshrate = enabled
+            @endcode</td>
+    </tr>
+</table>
 
 ### dd_configuration_option
 
@@ -1362,8 +1659,8 @@ consent prompt for directory ACLs, so the Web UI shows setup steps for correctin
     <tr>
         <td>Description</td>
         <td colspan="2">
-            When using virtual display device (VDD) for streaming, it might incorrectly display HDR color. Sunshine can try to mitigate this issue, by turning HDR off and then on again.<br>
-            If the value is set to 0, the workaround is disabled (default). If the value is between 0 and 3000 milliseconds, Sunshine will turn off HDR, wait for the specified amount of time and then turn HDR on again. The recommended delay time is around 500 milliseconds in most cases.<br>
+            When using virtual display device (VDD) for streaming, it might incorrectly display HDR color. Apollo can try to mitigate this issue, by turning HDR off and then on again.<br>
+            If the value is set to 0, the workaround is disabled (default). If the value is between 0 and 3000 milliseconds, Apollo will turn off HDR, wait for the specified amount of time and then turn HDR on again. The recommended delay time is around 500 milliseconds in most cases.<br>
             DO NOT use this workaround unless you actually have issues with HDR as it directly impacts stream start time!
             @note{This option works independently of [dd_hdr_option](#dd_hdr_option)}
             @note{Applies to Windows only.}
@@ -1523,7 +1820,7 @@ consent prompt for directory ACLs, so the Web UI shows setup steps for correctin
     <tr>
         <td>Description</td>
         <td colspan="2">
-            The maximum bitrate (in Kbps) that Sunshine will encode the stream at. If set to 0, it will always use the bitrate requested by Moonlight.
+            The maximum bitrate (in Kbps) that Apollo will encode the stream at. If set to 0, it will always use the bitrate requested by Moonlight.
         </td>
     </tr>
     <tr>
@@ -1546,7 +1843,7 @@ consent prompt for directory ACLs, so the Web UI shows setup steps for correctin
     <tr>
         <td>Description</td>
         <td colspan="2">
-            The maximum resolution (formatted as WIDTHxHEIGHT) that Sunshine will stream at. Larger client requests
+            The maximum resolution (formatted as WIDTHxHEIGHT) that Apollo will stream at. Larger client requests
             are downscaled, preserving aspect ratio. Lowering this reduces encoding latency on hosts where the
             encoder cannot keep up with the requested resolution. If empty, the resolution requested by Moonlight
             is used.
@@ -1571,7 +1868,7 @@ consent prompt for directory ACLs, so the Web UI shows setup steps for correctin
     <tr>
         <td>Description</td>
         <td colspan="2">
-            Sunshine tries to save bandwidth when content on screen is static or a low framerate. Because many clients expect a constant stream of video frames, a certain amount of duplicate frames are sent when this happens. This setting controls the lowest effective framerate a stream can reach.
+            Apollo tries to save bandwidth when content on screen is static or a low framerate. Because many clients expect a constant stream of video frames, a certain amount of duplicate frames are sent when this happens. This setting controls the lowest effective framerate a stream can reach.
         </td>
     </tr>
     <tr>
@@ -1599,7 +1896,7 @@ consent prompt for directory ACLs, so the Web UI shows setup steps for correctin
     <tr>
         <td>Description</td>
         <td colspan="2">
-            Sunshine will attempt to open ports for streaming over the internet.
+            Apollo will attempt to open ports for streaming over the internet.
         </td>
     </tr>
     <tr>
@@ -1622,7 +1919,7 @@ consent prompt for directory ACLs, so the Web UI shows setup steps for correctin
     <tr>
         <td>Description</td>
         <td colspan="2">
-            Set the address family that Sunshine will use.
+            Set the address family that Apollo will use.
         </td>
     </tr>
     <tr>
@@ -1654,12 +1951,12 @@ consent prompt for directory ACLs, so the Web UI shows setup steps for correctin
     <tr>
         <td>Description</td>
         <td colspan="2">
-            Set the IP address to bind Sunshine to. This is useful when you have multiple network interfaces
-            and want to restrict Sunshine to a specific one. If not set, Sunshine will bind to all available
+            Set the IP address to bind Apollo to. This is useful when you have multiple network interfaces
+            and want to restrict Apollo to a specific one. If not set, Apollo will bind to all available
             interfaces (0.0.0.0 for IPv4 or :: for IPv6).
             <br><br>
             <strong>Note:</strong> The address must exist on the host and be compatible with address_family.
-            An IPv4 address works with either "ipv4" or "both"; when used with "both", Sunshine listens only
+            An IPv4 address works with either "ipv4" or "both"; when used with "both", Apollo listens only
             on that IPv4 address. An IPv6 address requires address_family to be set to "both".
         </td>
     </tr>
@@ -1695,7 +1992,7 @@ consent prompt for directory ACLs, so the Web UI shows setup steps for correctin
     <tr>
         <td>Description</td>
         <td colspan="2">
-            Set the family of ports used by Sunshine.
+            Set the family of ports used by Apollo.
             Changing this value will offset other ports as shown in config UI.
         </td>
     </tr>
@@ -1788,7 +2085,7 @@ consent prompt for directory ACLs, so the Web UI shows setup steps for correctin
     <tr>
         <td>Description</td>
         <td colspan="2">
-            If no external IP address is given, Sunshine will attempt to automatically detect external ip-address.
+            If no external IP address is given, Apollo will attempt to automatically detect external ip-address.
         </td>
     </tr>
     <tr>
@@ -2042,7 +2339,7 @@ consent prompt for directory ACLs, so the Web UI shows setup steps for correctin
     <tr>
         <td>Description</td>
         <td colspan="2">
-            The path where the current Sunshine log is stored. Each time Sunshine starts, up to five previous
+            The path where the current Apollo log is stored. Each time Apollo starts, up to five previous
             logs are retained by appending <code>.1</code> through <code>.5</code> to this path.
         </td>
     </tr>
@@ -2116,7 +2413,7 @@ consent prompt for directory ACLs, so the Web UI shows setup steps for correctin
     <tr>
         <td>Description</td>
         <td colspan="2">
-            The file where current state of Sunshine is stored.
+            The file where current state of Apollo is stored.
         </td>
     </tr>
     <tr>
@@ -2134,6 +2431,78 @@ consent prompt for directory ACLs, so the Web UI shows setup steps for correctin
 </table>
 
 ## Advanced
+
+### envvar_compatibility_mode
+
+<table>
+    <tr>
+        <td>Description</td>
+        <td colspan="2">
+            Enable compatibility mode for environment variables used by legacy clients and
+            scripts.
+        </td>
+    </tr>
+    <tr>
+        <td>Default</td>
+        <td colspan="2">@code{}
+            disabled
+            @endcode</td>
+    </tr>
+    <tr>
+        <td>Example</td>
+        <td colspan="2">@code{}
+            envvar_compatibility_mode = enabled
+            @endcode</td>
+    </tr>
+</table>
+
+### legacy_ordering
+
+<table>
+    <tr>
+        <td>Description</td>
+        <td colspan="2">
+            Enable the app-ordering workaround for legacy clients. Disable this if a client or
+            script cannot handle UTF-8 correctly. Artemis supports the modern behavior.
+        </td>
+    </tr>
+    <tr>
+        <td>Default</td>
+        <td colspan="2">@code{}
+            disabled
+            @endcode</td>
+    </tr>
+    <tr>
+        <td>Example</td>
+        <td colspan="2">@code{}
+            legacy_ordering = enabled
+            @endcode</td>
+    </tr>
+</table>
+
+### ignore_encoder_probe_failure
+
+<table>
+    <tr>
+        <td>Description</td>
+        <td colspan="2">
+            Continue streaming even if encoder probing fails. If no encoder is actually
+            available, streaming will still fail later.
+        </td>
+    </tr>
+    <tr>
+        <td>Default</td>
+        <td colspan="2">@code{}
+            disabled
+            @endcode</td>
+    </tr>
+    <tr>
+        <td>Example</td>
+        <td colspan="2">@code{}
+            ignore_encoder_probe_failure = enabled
+            @endcode</td>
+    </tr>
+</table>
 
 ### fec_percentage
 
@@ -2311,7 +2680,7 @@ consent prompt for directory ACLs, so the Web UI shows setup steps for correctin
     <tr>
         <td>Default</td>
         <td colspan="2">Automatic.
-            Sunshine will use the first capture method available in the order of the table above.</td>
+            Apollo will use the first capture method available in the order of the table above.</td>
     </tr>
     <tr>
         <td>Example</td>
@@ -2331,13 +2700,13 @@ consent prompt for directory ACLs, so the Web UI shows setup steps for correctin
         <td>Capture for wlroots based Wayland compositors via wlr-screencopy-unstable-v1. It is possible to capture
             virtual displays in e.g. Hyprland using this method. On an output that refreshes at least 1.5 times
             as fast as the stream, frames are captured when the compositor has a new one instead of on a clock of
-            Sunshine's own, which avoids repeated frames; a virtual display at twice the stream's frame rate
+            Apollo's own, which avoids repeated frames; a virtual display at twice the stream's frame rate
             qualifies.
             @note{Applies to Linux only.}</td>
     </tr>
     <tr>
         <td>kms</td>
-        <td>DRM/KMS screen capture from the kernel. This requires that Sunshine has `cap_sys_admin` capability.
+        <td>DRM/KMS screen capture from the kernel. This requires that Apollo has `cap_sys_admin` capability.
             @note{Applies to Linux only.}</td>
     </tr>
     <tr>
@@ -2365,7 +2734,7 @@ consent prompt for directory ACLs, so the Web UI shows setup steps for correctin
         <td>wgc</td>
         <td>(beta feature) Use Windows.Graphics.Capture to capture the display.
             @note{Applies to Windows only.}
-            @attention{This capture method is not compatible with the Sunshine service.}</td>
+            @attention{This capture method is not compatible with the Apollo service.}</td>
     </tr>
 </table>
 
@@ -2408,7 +2777,7 @@ consent prompt for directory ACLs, so the Web UI shows setup steps for correctin
     </tr>
     <tr>
         <td>Default</td>
-        <td colspan="2">Sunshine will use the first encoder that is available.</td>
+        <td colspan="2">Apollo will use the first encoder that is available.</td>
     </tr>
     <tr>
         <td>Example</td>
@@ -2580,7 +2949,7 @@ consent prompt for directory ACLs, so the Web UI shows setup steps for correctin
         <td>Description</td>
         <td colspan="2">
             Single-frame VBV/HRD percentage increase.
-            By default Sunshine uses single-frame VBV/HRD, which means any encoded video frame size is not expected to
+            By default Apollo uses single-frame VBV/HRD, which means any encoded video frame size is not expected to
             exceed requested bitrate divided by requested frame rate. Relaxing this restriction can be beneficial and
             act as low-latency variable bitrate, but may also lead to packet loss if the network doesn't have buffer
             headroom to handle bitrate spikes. Maximum accepted value is 400, which corresponds to 5x increased
@@ -2682,7 +3051,7 @@ consent prompt for directory ACLs, so the Web UI shows setup steps for correctin
         <td>Description</td>
         <td colspan="2">
             Adaptive P-State algorithm which NVIDIA drivers employ doesn't work well with low latency streaming,
-            so Sunshine requests high power mode explicitly.
+            so Apollo requests high power mode explicitly.
             @note{This option only applies when using NVENC [encoder](#encoder).}
             @warning{Disabling this is not recommended since this can lead to significantly increased encoding latency.}
             @note{Applies to Windows only.}
@@ -2708,9 +3077,9 @@ consent prompt for directory ACLs, so the Web UI shows setup steps for correctin
     <tr>
         <td>Description</td>
         <td colspan="2">
-            Sunshine can't capture fullscreen OpenGL and Vulkan programs at full frame rate unless they present on
-            top of DXGI. With this option enabled Sunshine changes global Vulkan/OpenGL present method to
-            "Prefer layered on DXGI Swapchain". This is system-wide setting that is reverted on Sunshine program exit.
+            Apollo can't capture fullscreen OpenGL and Vulkan programs at full frame rate unless they present on
+            top of DXGI. With this option enabled Apollo changes global Vulkan/OpenGL present method to
+            "Prefer layered on DXGI Swapchain". This is system-wide setting that is reverted on Apollo program exit.
             @note{This option only applies when using NVENC [encoder](#encoder).}
             @note{Applies to Windows only.}
         </td>
@@ -2999,7 +3368,7 @@ consent prompt for directory ACLs, so the Web UI shows setup steps for correctin
         <td>Description</td>
         <td colspan="2">
             Maximum Access Unit (frame) size for rate control, in bits. This is a last-resort
-            control for capping oversized encoded frames that would otherwise exceed Sunshine's
+            control for capping oversized encoded frames that would otherwise exceed Apollo's
             four-block FEC capacity and be sent without FEC protection.
             @note{This option only applies to H.264 and HEVC when using amdvce [encoder](#encoder).
             AV1 does not support this option.}

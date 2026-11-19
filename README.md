@@ -12,7 +12,20 @@ Major features:
 
 ## Usage
 
-Refer to LizardByte's documentation hosted on [Read the Docs](https://docs.lizardbyte.dev/projects/sunshine) for now.
+Apollo is based on the Sunshine 2026 codebase. The documentation in this repository is the
+primary reference:
+
+- [Getting started](docs/getting_started.md)
+- [Configuration](docs/configuration.md)
+- [Troubleshooting](docs/troubleshooting.md)
+- [API](docs/api.md)
+- [Building](docs/building.md)
+- [Apollo Wiki](https://github.com/ClassicOldSong/Apollo/wiki)
+
+> [!NOTE]
+> Some inherited upstream commands, package names, environment variables, and paths still
+> use `sunshine`/`Sunshine` where those are the actual binary, artifact, or compatibility
+> identifiers. Apollo-specific behavior is called out in the documentation.
 
 Currently Virtual Display support is Windows only, Linux support is planned and will be implemented in the future.
 
@@ -26,7 +39,7 @@ Check out the [Wiki](https://github.com/ClassicOldSong/Apollo/wiki/Permission-Sy
 ## About Virtual Display
 
 > [!WARNING]
-> ***It is highly recommend to remove any other virtual display solutions from your system and Apollo/Sunshine config, to reduce confusions and compatibility issues.***
+> ***It is highly recommend to remove any other virtual display solutions from your system and Apollo config, to reduce confusions and compatibility issues.***
 
 > [!NOTE]
 > **TL;DR** Just treat your Artemis/Moonlight client like a dedicated PnP monitor with Apollo.

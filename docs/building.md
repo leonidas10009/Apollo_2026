@@ -1,5 +1,11 @@
 # Building
-Sunshine binaries are built using [CMake](https://cmake.org) and requires `cmake` > 3.25.
+Apollo binaries are built using [CMake](https://cmake.org) and require `cmake` >= 3.24.
+
+> [!NOTE]
+> The CMake project is named `Apollo`, but the executable target and binary remain `sunshine`
+> for compatibility with the upstream codebase and existing integrations. Commands below that
+> use `sunshine` refer to that target/binary. On Windows, MSYS2 UCRT64 is the recommended
+> environment (`C:\msys64\msys2_shell.cmd -defterm -here -no-start -ucrt64`).
 
 ## Building Locally
 
@@ -18,25 +24,25 @@ Boost `1.89.0` or newer can be supplied as a system package. When a compatible s
 downloads the project-locked Boost release through CPM. Static Boost libraries are preferred on every platform by
 default; pass `-DBOOST_USE_STATIC=OFF` to use shared system libraries instead.
 
-Sunshine's build and packaging automation uses packaged static Boost libraries on Arch Linux, Fedora 44 or newer,
+Apollo's build and packaging automation uses packaged static Boost libraries on Arch Linux, Fedora 44 or newer,
 Ubuntu 26.04 or newer, macOS with Homebrew, Windows with MSYS2, and FreeBSD. Older supported distributions continue
 to use the CPM fallback because their repositories do not meet the minimum Boost version.
 
-On Linux and FreeBSD, Sunshine and the prebuilt FFmpeg libraries use the system's shared libva core and backends.
-These components share a private display-context ABI and must come from the same libva build. Sunshine also uses
+On Linux and FreeBSD, Apollo and the prebuilt FFmpeg libraries use the system's shared libva core and backends.
+These components share a private display-context ABI and must come from the same libva build. Apollo also uses
 the system libva headers so its compatibility shims match the installed API. Bundled libva archives and headers
 are excluded from the build. The system provides libdrm, the GPU's VA-API driver, and libva's driver configuration.
 AppImages use the same system libraries at runtime; they do not bundle libva.
 
 #### Prebuilt Web UI
 
-Sunshine releases publish the platform-independent Web UI as the `@lizardbyte/sunshine` package to npm and GitHub
-Packages. The package contains the production assets under `build/assets/web`, so downstream packagers can install the
-Web UI without running Node.js or Vite during the native Sunshine build.
+Apollo publishes the platform-independent Web UI as the `@classicoldsong/apollo` package. The package contains the
+production assets under `build/assets/web`, so downstream packagers can install the Web UI without running Node.js or
+Vite during the native Apollo build.
 
 #### FreeBSD
 > [!CAUTION]
-> Sunshine support for FreeBSD is experimental and may be incomplete or not work as expected
+> Apollo support for FreeBSD is experimental and may be incomplete or not work as expected
 
 ##### Install dependencies
 ```sh
@@ -84,7 +90,7 @@ dependencies we use in Debian-based, Fedora-based and Arch-based distributions. 
 script to support other distributions.
 
 ##### KMS Capture
-If you are using KMS, patching the Sunshine binary with `setcap` is required. Some post-install scripts handle this. If building
+If you are using KMS, patching the Apollo binary with `setcap` is required. Some post-install scripts handle this. If building
 from source and using the binary directly, this will also work:
 
 ```bash
@@ -95,10 +101,10 @@ sudo mv /tmp/sunshine build/sunshine
 ```
 
 ##### CUDA Toolkit
-When building Sunshine for a system with an NVIDIA GPU, install the CUDA Toolkit before configuring or compiling
-Sunshine. CUDA support is selected at compile time and is used for NVFBC capture and direct GPU-memory NVENC encoding.
+When building Apollo for a system with an NVIDIA GPU, install the CUDA Toolkit before configuring or compiling
+Apollo. CUDA support is selected at compile time and is used for NVFBC capture and direct GPU-memory NVENC encoding.
 This applies to every source build, including builds made through the AUR or for third-party repositories such as
-Omarchy. Installing the CUDA Toolkit after Sunshine was compiled does not enable CUDA support; Sunshine must be rebuilt.
+Omarchy. Installing the CUDA Toolkit after Apollo was compiled does not enable CUDA support; Apollo must be rebuilt.
 
 > [!NOTE]
 > Users installing a prebuilt package supplied by LizardByte do not need to install the CUDA Toolkit. This includes the
