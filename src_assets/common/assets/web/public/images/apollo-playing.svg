@@ -1,36 +1,40 @@
-<?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
-<svg width="100%" height="100%" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xml:space="preserve" xmlns:serif="http://www.serif.com/" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;">
-    <g transform="matrix(1,0,0,1,-1088,0)">
-        <g id="ICON_PLAYING" transform="matrix(1,0,0,1,1088,1.13687e-13)">
-            <rect x="0" y="0" width="1024" height="1024" style="fill:none;"/>
-            <g id="apollo.afdesign" transform="matrix(1,0,0,1,512,512)">
-                <g transform="matrix(1,0,0,1,-512,-512)">
-                    <clipPath id="_clip1">
-                        <rect x="0" y="0" width="1024" height="1024"/>
-                    </clipPath>
-                    <g clip-path="url(#_clip1)">
-                        <g>
-                            <g transform="matrix(1.27997,0,0,1.27997,-143.345,-143.345)">
-                                <g transform="matrix(1.26917,-0.732758,0.732758,1.26917,-512.989,237.355)">
-                                    <path d="M512,264C556.301,340.731 638.172,388 726.774,388C682.473,464.731 682.473,559.269 726.774,636C638.172,636 556.301,683.269 512,760C467.699,683.269 385.828,636 297.226,636C341.527,559.269 341.527,464.731 297.226,388C385.828,388 467.699,340.731 512,264ZM512,338.465C471.86,381.904 419.404,412.19 361.715,425.233C379.264,481.715 379.264,542.285 361.715,598.767C419.404,611.81 471.86,642.096 512,685.535C552.14,642.096 604.596,611.81 662.285,598.767C644.736,542.285 644.736,481.715 662.285,425.233C604.596,412.19 552.14,381.904 512,338.465Z" style="fill:white;"/>
-                                </g>
-                                <g transform="matrix(1.26917,-0.732758,0.732758,1.26917,-512.989,237.355)">
-                                    <path d="M512,264C556.301,340.731 638.172,388 726.774,388C682.473,464.731 682.473,559.269 726.774,636C638.172,636 556.301,683.269 512,760C467.699,683.269 385.828,636 297.226,636C341.527,559.269 341.527,464.731 297.226,388C385.828,388 467.699,340.731 512,264ZM512,338.465C471.86,381.904 419.404,412.19 361.715,425.233C379.264,481.715 379.264,542.285 361.715,598.767C419.404,611.81 471.86,642.096 512,685.535C552.14,642.096 604.596,611.81 662.285,598.767C644.736,542.285 644.736,481.715 662.285,425.233C604.596,412.19 552.14,381.904 512,338.465Z" style="fill:white;"/>
-                                </g>
-                            </g>
-                        </g>
-                    </g>
-                </g>
-            </g>
-            <g>
-                <g transform="matrix(3.13097e-17,0.511327,-0.481328,2.94728e-17,908.573,-366.46)">
-                    <path d="M1718,454L2027,1011L1409,1011L1718,454Z" style="fill:rgb(46,202,51);"/>
-                    <path d="M1830.33,383.677L2139.32,940.677C2163.08,983.499 2163.41,1036.56 2140.2,1079.72C2116.99,1122.87 2073.79,1149.51 2027,1149.51L1409,1149.51C1362.21,1149.51 1319.01,1122.87 1295.8,1079.72C1272.59,1036.56 1272.92,983.499 1296.67,940.677L1605.67,383.677C1629.11,341.427 1671.84,315.494 1718,315.494C1764.16,315.494 1806.89,341.427 1830.33,383.677ZM1718,454L1409,1011L2027,1011L1718,454Z" style="fill:white;"/>
-                    <path d="M1718,454L2027,1011L1409,1011L1718,454Z" style="fill:rgb(46,202,51);"/>
-                    <path d="M1830.33,383.677L2139.32,940.677C2163.08,983.499 2163.41,1036.56 2140.2,1079.72C2116.99,1122.87 2073.79,1149.51 2027,1149.51L1409,1149.51C1362.21,1149.51 1319.01,1122.87 1295.8,1079.72C1272.59,1036.56 1272.92,983.499 1296.67,940.677L1605.67,383.677C1629.11,341.427 1671.84,315.494 1718,315.494C1764.16,315.494 1806.89,341.427 1830.33,383.677ZM1718,454L1409,1011L2027,1011L1718,454Z" style="fill:white;"/>
-                </g>
-            </g>
-        </g>
-    </g>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="Apollo 2026">
+  <defs>
+    <linearGradient id="screen" x1="0" y1="0" x2="1" y2="0.35">
+      <stop offset="0" stop-color="#08D4F5"/>
+      <stop offset="0.55" stop-color="#0AA6F5"/>
+      <stop offset="1" stop-color="#0B6BFF"/>
+    </linearGradient>
+    <linearGradient id="orbit" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#06D4F2"/>
+      <stop offset="0.55" stop-color="#6FD3A7"/>
+      <stop offset="1" stop-color="#F7B71D"/>
+    </linearGradient>
+    <linearGradient id="rocket" x1="0" y1="1" x2="0.8" y2="0">
+      <stop offset="0" stop-color="#F2A007"/>
+      <stop offset="1" stop-color="#FFC928"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Monitor screen -->
+  <rect x="190" y="225" width="640" height="420" rx="30" fill="none" stroke="url(#screen)" stroke-width="38"/>
+  <rect x="248" y="283" width="524" height="304" rx="16" fill="none" stroke="url(#screen)" stroke-width="26"/>
+
+  <!-- Stand -->
+  <path d="M468 645 L442 762 L582 762 L556 645" fill="none" stroke="#0B6BFF" stroke-width="34" stroke-linejoin="round"/>
+  <rect x="360" y="764" width="300" height="50" rx="25" fill="none" stroke="#0B6BFF" stroke-width="34"/>
+
+  <!-- Orbit swoosh -->
+  <path d="M240 552 C236 612 300 642 382 628 C548 598 668 466 716 338"
+        fill="none" stroke="url(#orbit)" stroke-width="30" stroke-linecap="round"/>
+
+  <!-- Rocket -->
+  <g>
+    <path d="M704 352 C724 294 772 240 826 208 C834 256 812 314 762 372 Z" fill="url(#rocket)"/>
+    <path d="M704 352 L668 340 L686 300 L722 314 Z" fill="url(#rocket)"/>
+    <path d="M762 372 L792 398 L826 372 L806 338 Z" fill="url(#rocket)"/>
+    <circle cx="786" cy="292" r="20" fill="#0B0D13" opacity="0.85"/>
+  </g>
+  <circle cx="800" cy="800" r="150" fill="#0B0D13"/>
+  <circle cx="800" cy="800" r="122" fill="#22C55E"/>
 </svg>
