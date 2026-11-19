@@ -157,13 +157,16 @@
             <span v-if="client.connected" class="badge text-bg-success">{{ $t('pin.connected') }}</span>
             <div class="ms-auto d-flex">
               <button v-if="client.connected" class="btn btn-warning btn-sm me-2" :title="$t('pin.disconnect')"
+                      :aria-label="$t('pin.disconnect')"
                       @click="disconnectClient(client.uuid)">
                 <Unplug :size="16" class="icon"></Unplug>
               </button>
-              <button class="btn btn-primary btn-sm me-2" :title="$t('pin.edit_client')" @click="editClient(client)">
+              <button class="btn btn-primary btn-sm me-2" :title="$t('pin.edit_client')"
+                      :aria-label="$t('pin.edit_client')" @click="editClient(client)">
                 <Pencil :size="16" class="icon"></Pencil>
               </button>
-              <button class="btn btn-danger btn-sm" :title="$t('pin.unpair_client')" @click="unpairSingle(client.uuid)">
+              <button class="btn btn-danger btn-sm" :title="$t('pin.unpair_client')"
+                      :aria-label="$t('pin.unpair_client')" @click="unpairSingle(client.uuid)">
                 <Trash2 :size="16" class="icon"></Trash2>
               </button>
             </div>

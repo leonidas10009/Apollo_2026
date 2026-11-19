@@ -89,7 +89,10 @@
                 <edit :size="16" class="icon"></edit>
                 {{ $t('apps.edit') }}
               </button>
-              <button class="btn btn-sm btn-outline-danger w-100" @click="showDeleteModal(index)">
+              <button class="btn btn-sm btn-outline-danger w-100"
+                      :title="$t('apps.delete')"
+                      :aria-label="$t('apps.delete')"
+                      @click="showDeleteModal(index)">
                 <trash-2 :size="16" class="icon"></trash-2>
               </button>
             </div>
@@ -1012,7 +1015,13 @@
             "Content-Type": "application/json"
           },
         }).then((r) => {
-          if (r.status === 200) document.location.reload();
+          if (r.ok || (r.status >= 200 && r.status < 300)) {
+            this.closeDeleteModal();
+            return this.loadApps();
+          }
+          throw new Error(`HTTP ${r.status}`);
+        }).catch((error) => {
+          window.alert(this.$t('apps.delete_failed') + (error.message || ""));
         });
       },
       addCmd(type) {
@@ -1222,7 +1231,13 @@
           },
           body: JSON.stringify(this.editForm),
         }).then((r) => {
-          if (r.status === 200) document.location.reload();
+          if (r.ok || (r.status >= 200 && r.status < 300)) {
+            this.closeEditModal();
+            return this.loadApps();
+          }
+          throw new Error(`HTTP ${r.status}`);
+        }).catch((error) => {
+          this.editFormError = this.$t('apps.save_failed') + (error.message || "");
         });
       },
       handleImageError(event) {

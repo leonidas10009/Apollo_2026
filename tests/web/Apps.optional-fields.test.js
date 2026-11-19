@@ -4,7 +4,7 @@ vi.mock('../../src_assets/common/assets/web/Navbar.vue', () => ({
   default: { template: '<div />' },
 }))
 vi.mock('../../src_assets/common/assets/web/fetch_utils', () => ({
-  apiFetch: vi.fn(() => Promise.resolve({ status: 204 })),
+  apiFetch: vi.fn(() => Promise.resolve({ status: 200, ok: true })),
 }))
 
 import { apiFetch } from '../../src_assets/common/assets/web/fetch_utils'
@@ -22,6 +22,8 @@ function editContext(app) {
     apps: [app],
     platform: 'windows',
     openEditModal: vi.fn(),
+    closeEditModal: vi.fn(),
+    loadApps: vi.fn(() => Promise.resolve()),
     $refs: { editModal: { querySelector: () => ({ scrollTop: 0 }) } },
     $t: key => key,
   }
