@@ -361,15 +361,11 @@ TEST_F(ProcessPNGTest, CheckValidPNG_NonExistentFile) {
   EXPECT_FALSE(proc::check_valid_png(test_file));
 }
 
-TEST_F(ProcessPNGTest, CheckValidPNG_RealFile) {
-  // Test with the actual sunshine.png from the project root
-
-  // Only run this test if the file exists
-  if (const fs::path sunshine_png = fs::path(SUNSHINE_SOURCE_DIR) / "sunshine.png"; fs::exists(sunshine_png)) {
-    EXPECT_TRUE(proc::check_valid_png(sunshine_png));
-  } else {
-    GTEST_SKIP() << "sunshine.png not found in project root";
-  }
+TEST_F(ProcessPNGTest, CheckValidPNG_ApolloFile) {
+  // Test with the actual apollo.png from the project root
+  const fs::path apollo_png = fs::path(SUNSHINE_SOURCE_DIR) / "apollo.png";
+  ASSERT_TRUE(fs::exists(apollo_png));
+  EXPECT_TRUE(proc::check_valid_png(apollo_png));
 }
 
 TEST_F(ProcessPNGTest, CheckValidPNG_JPEGFile) {

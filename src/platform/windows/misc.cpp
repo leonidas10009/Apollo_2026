@@ -1149,6 +1149,12 @@ namespace platf {
         std::wstring env_block = create_environment_block(cloned_env);
         std::wstring wcmd = resolve_command_string(cmd, start_dir, user_token, creation_flags);
         ret = CreateProcessAsUserW(user_token, nullptr, (LPWSTR) wcmd.c_str(), nullptr, nullptr, !!(startup_info.StartupInfo.dwFlags & STARTF_USESTDHANDLES), creation_flags, env_block.data(), start_dir.empty() ? nullptr : start_dir.c_str(), (LPSTARTUPINFOW) &startup_info, &process_info);
+        if (!ret && GetLastError() == ERROR_ACCESS_DENIED && (creation_flags & CREATE_BREAKAWAY_FROM_JOB)) {
+          // A job object that does not allow breakaway rejects the flag with access denied.
+          // Retry without it so Sunshine still works when it was itself launched inside a job.
+          BOOST_LOG(debug) << "Retrying process launch without CREATE_BREAKAWAY_FROM_JOB"sv;
+          ret = CreateProcessAsUserW(user_token, nullptr, (LPWSTR) wcmd.c_str(), nullptr, nullptr, !!(startup_info.StartupInfo.dwFlags & STARTF_USESTDHANDLES), creation_flags & ~CREATE_BREAKAWAY_FROM_JOB, env_block.data(), start_dir.empty() ? nullptr : start_dir.c_str(), (LPSTARTUPINFOW) &startup_info, &process_info);
+        }
       });
     }
     // Otherwise, launch the process using CreateProcessW()
@@ -1173,6 +1179,12 @@ namespace platf {
       std::wstring env_block = create_environment_block(cloned_env);
       std::wstring wcmd = resolve_command_string(cmd, start_dir, nullptr, creation_flags);
       ret = CreateProcessW(nullptr, (LPWSTR) wcmd.c_str(), nullptr, nullptr, !!(startup_info.StartupInfo.dwFlags & STARTF_USESTDHANDLES), creation_flags, env_block.data(), start_dir.empty() ? nullptr : start_dir.c_str(), (LPSTARTUPINFOW) &startup_info, &process_info);
+      if (!ret && GetLastError() == ERROR_ACCESS_DENIED && (creation_flags & CREATE_BREAKAWAY_FROM_JOB)) {
+        // A job object that does not allow breakaway rejects the flag with access denied.
+        // Retry without it so Sunshine still works when it was itself launched inside a job.
+        BOOST_LOG(debug) << "Retrying process launch without CREATE_BREAKAWAY_FROM_JOB"sv;
+        ret = CreateProcessW(nullptr, (LPWSTR) wcmd.c_str(), nullptr, nullptr, !!(startup_info.StartupInfo.dwFlags & STARTF_USESTDHANDLES), creation_flags & ~CREATE_BREAKAWAY_FROM_JOB, env_block.data(), start_dir.empty() ? nullptr : start_dir.c_str(), (LPSTARTUPINFOW) &startup_info, &process_info);
+      }
     }
 
     // Use the results of the launch to create a bp::child object

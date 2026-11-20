@@ -309,9 +309,9 @@ int main(int argc, char *argv[]) {
 #ifdef _WIN32
   // Modify relevant NVIDIA control panel settings if the system has corresponding gpu
   if (nvprefs_instance.load()) {
-    // Restore global settings to the undo file left by improper termination of sunshine.exe
+    // Restore global settings to the undo file left by improper termination of apollo.exe
     nvprefs_instance.restore_from_and_delete_undo_file_if_exists();
-    // Modify application settings for sunshine.exe
+    // Modify application settings for apollo.exe
     nvprefs_instance.modify_application_profile();
     // Modify global settings, undo file is produced in the process to restore after improper termination
     nvprefs_instance.modify_global_profile();
@@ -319,7 +319,7 @@ int main(int argc, char *argv[]) {
     nvprefs_instance.unload();
   }
 
-  // Wait as long as possible to terminate Sunshine.exe during logoff/shutdown
+  // Wait as long as possible to terminate Apollo.exe during logoff/shutdown
   SetProcessShutdownParameters(0x100, SHUTDOWN_NORETRY);
 
   // We must create a hidden window to receive shutdown notifications since we load gdi32.dll
@@ -523,7 +523,7 @@ int main(int argc, char *argv[]) {
     BOOST_LOG(fatal) << "HTTP interface failed to initialize"sv;
 
 #ifdef _WIN32
-    BOOST_LOG(fatal) << "To relaunch Apollo successfully, use the shortcut in the Start Menu. Do not run sunshine.exe manually."sv;
+    BOOST_LOG(fatal) << "To relaunch Apollo successfully, use the shortcut in the Start Menu. Do not run apollo.exe manually."sv;
     std::this_thread::sleep_for(10s);
 #endif
 

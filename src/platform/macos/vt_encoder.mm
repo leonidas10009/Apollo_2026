@@ -61,7 +61,9 @@ namespace {
 #else
       constexpr bool arm64 = false;
 #endif
-      const bool try_low_latency = platf::vt::try_low_latency(codec, arm64);
+      // Low-latency rate control is hardware-only, so never request it for software encoding.
+      const auto software_policy = platf::vt::software_policy(config::video.vt.vt_software);
+      const bool try_low_latency = platf::vt::try_low_latency(codec, arm64) && software_policy != platf::vt::software_policy_e::forced;
       bool low_latency = try_low_latency && create_session(codec, config, true);
       if (!low_latency && !create_session(codec, config, false)) {
         BOOST_LOG(error) << "VideoToolbox could not create a compression session"sv;
@@ -246,9 +248,14 @@ namespace {
      */
     bool create_session(CMVideoCodecType codec, const video::config_t &config, bool low_latency) {
       CFMutableDictionaryRef specification = CFDictionaryCreateMutable(kCFAllocatorDefault, 0, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
-      // VideoToolbox's software encoder is far slower than Sunshine's own software encoder, so
-      // fail without hardware and let encoder selection fall back to that instead.
-      CFDictionarySetValue(specification, kVTVideoEncoderSpecification_RequireHardwareAcceleratedVideoEncoder, kCFBooleanTrue);
+      const auto software_policy = platf::vt::software_policy(config::video.vt.vt_software);
+      if (software_policy == platf::vt::software_policy_e::hardware_only) {
+        // VideoToolbox's software encoder is far slower than Sunshine's own software encoder, so
+        // fail without hardware and let encoder selection fall back to that instead.
+        CFDictionarySetValue(specification, kVTVideoEncoderSpecification_RequireHardwareAcceleratedVideoEncoder, kCFBooleanTrue);
+      } else if (software_policy == platf::vt::software_policy_e::forced) {
+        CFDictionarySetValue(specification, kVTVideoEncoderSpecification_EnableHardwareAcceleratedVideoEncoder, kCFBooleanFalse);
+      }
       if (low_latency) {
         CFDictionarySetValue(specification, kVTVideoEncoderSpecification_EnableLowLatencyRateControl, kCFBooleanTrue);
       }
@@ -524,6 +531,17 @@ namespace platf::vt {
 
   bool try_low_latency(CMVideoCodecType codec, bool arm64) {
     return codec == kCMVideoCodecType_H264 || arm64;
+  }
+
+  software_policy_e software_policy(int software) {
+    switch (software) {
+      case 2:
+        return software_policy_e::allowed;
+      case 3:
+        return software_policy_e::forced;
+      default:
+        return software_policy_e::hardware_only;
+    }
   }
 
   CFStringRef h264_entropy_mode(int coder) {

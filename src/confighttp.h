@@ -205,6 +205,14 @@ namespace confighttp {
    */
   void saveApp(const resp_https_t &response, const req_https_t &request);
 
+  /**
+   * @brief Persist a manual application order from the Web UI.
+   *
+   * @param response HTTPS response receiving the request result.
+   * @param request Authenticated, CSRF protected request with an `order` array of UUIDs.
+   */
+  void reorderApps(const resp_https_t &response, const req_https_t &request);
+
 #ifdef SUNSHINE_TESTS
   /**
    * @brief Replace native permission statuses for deterministic HTTP tests.

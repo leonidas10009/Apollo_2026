@@ -200,15 +200,12 @@ INSTANTIATE_TEST_SUITE_P(
       true,
       "Flatpak installer stops after udev reload failure"
     },
-    // Cross-platform tests with xfail on Windows CI
+    // Cross-platform command launch test
     ExternalCommandTestData {
       SIMPLE_COMMAND,
       "all",
       true,
-      "Simple command test",
-      "",  // working_directory
-      IS_WINDOWS,  // xfail_condition
-      "Simple command test fails on Windows CI environment"  // xfail_reason
+      "Simple command test"
     },
     // Cross-platform failing test
     ExternalCommandTestData {

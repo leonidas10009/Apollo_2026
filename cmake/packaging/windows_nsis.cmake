@@ -64,12 +64,12 @@ set(CPACK_NSIS_EXTRA_UNINSTALL_COMMANDS
 set(CPACK_NSIS_MODIFY_PATH OFF)
 set(CPACK_NSIS_EXECUTABLES_DIRECTORY ".")
 # This will be shown on the installed apps Windows settings
-set(CPACK_NSIS_INSTALLED_ICON_NAME "sunshine.exe")
+set(CPACK_NSIS_INSTALLED_ICON_NAME "apollo.exe")
 set(CPACK_NSIS_CREATE_ICONS_EXTRA
         "${CPACK_NSIS_CREATE_ICONS_EXTRA}
         SetOutPath '\$INSTDIR'
         CreateShortCut '\$SMPROGRAMS\\\\$STARTMENU_FOLDER\\\\${CMAKE_PROJECT_NAME}.lnk' \
-            '\$INSTDIR\\\\sunshine.exe' '--shortcut'
+            '\$INSTDIR\\\\apollo.exe' '--shortcut'
         ")
 set(CPACK_NSIS_DELETE_ICONS_EXTRA
         "${CPACK_NSIS_DELETE_ICONS_EXTRA}

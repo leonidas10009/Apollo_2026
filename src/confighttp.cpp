@@ -1326,11 +1326,6 @@ namespace confighttp {
         file_tree["apps"] = newApps;
       }
 
-      // Sort the apps array by name
-      std::sort(apps_node.begin(), apps_node.end(), [](const nlohmann::json &a, const nlohmann::json &b) {
-        return a["name"].get<std::string>() < b["name"].get<std::string>();
-      });
-
       file_handler::write_file(config::stream.file_apps.c_str(), file_tree.dump(4));
       proc::refresh(config::stream.file_apps);
 
@@ -1338,6 +1333,92 @@ namespace confighttp {
       send_response(response, output_tree);
     } catch (std::exception &e) {
       BOOST_LOG(warning) << "SaveApp: "sv << e.what();
+      bad_request(response, e.what());
+    }
+  }
+
+  /**
+   * @brief Persist a manual application order from the Web UI.
+   *
+   * @details Applications absent from the request keep their relative order and are
+   * appended after the explicitly ordered entries. A running stream is not interrupted.
+   *
+   * @param response The HTTP response object.
+   * @param request The HTTP request object with a JSON `order` array of application UUIDs.
+   *
+   * @api_examples{/api/apps/reorder|:| POST|:| {"order":["<uuid>","<uuid>"]}}
+   */
+  void reorderApps(const resp_https_t &response, const req_https_t &request) {
+    if (!check_content_type(response, request, "application/json")) {
+      return;
+    }
+    if (!authenticate(response, request)) {
+      return;
+    }
+
+    const std::string client_id = get_client_id(request);
+    if (!validate_csrf_token(response, request, client_id)) {
+      return;
+    }
+
+    print_req(request);
+
+    try {
+      std::stringstream ss;
+      ss << request->content.rdbuf();
+      const nlohmann::json input_tree = nlohmann::json::parse(ss);
+
+      if (!input_tree.contains("order") || !input_tree["order"].is_array()) {
+        bad_request(response, "Missing or invalid 'order' array in request body");
+        return;
+      }
+
+      const std::string file = file_handler::read_file(config::stream.file_apps.c_str());
+      nlohmann::json file_tree = nlohmann::json::parse(file);
+      if (!file_tree.contains("apps") || !file_tree["apps"].is_array()) {
+        bad_request(response, "'apps' in file is not an array, cannot reorder");
+        return;
+      }
+
+      const auto &original_apps = file_tree["apps"];
+      nlohmann::json reordered_apps = nlohmann::json::array();
+      std::vector<bool> moved(original_apps.size(), false);
+
+      for (const auto &uuid_value : input_tree["order"]) {
+        if (!uuid_value.is_string()) {
+          BOOST_LOG(warning) << "ReorderApps: skipping a non-string UUID in the 'order' array";
+          continue;
+        }
+
+        const auto target_uuid = uuid_value.get<std::string>();
+        for (size_t i = 0; i < original_apps.size(); ++i) {
+          if (moved[i]) {
+            continue;
+          }
+          const auto &app = original_apps[i];
+          if (app.is_object() && app.contains("uuid") && app["uuid"].is_string() && app["uuid"].get<std::string>() == target_uuid) {
+            reordered_apps.push_back(app);
+            moved[i] = true;
+            break;
+          }
+        }
+      }
+
+      for (size_t i = 0; i < original_apps.size(); ++i) {
+        if (!moved[i]) {
+          reordered_apps.push_back(original_apps[i]);
+        }
+      }
+
+      file_tree["apps"] = std::move(reordered_apps);
+      file_handler::write_file(config::stream.file_apps.c_str(), file_tree.dump(4));
+      proc::refresh(config::stream.file_apps, false);
+
+      nlohmann::json output_tree;
+      output_tree["status"] = true;
+      send_response(response, output_tree);
+    } catch (std::exception &e) {
+      BOOST_LOG(warning) << "ReorderApps: "sv << e.what();
       bad_request(response, e.what());
     }
   }
@@ -3908,6 +3989,7 @@ namespace confighttp {
     server.resource["^/api/apps/([0-9]+)$"]["DELETE"] = deleteApp;
     server.resource["^/api/apps/close$"]["POST"] = closeApp;
     server.resource["^/api/apps/launch$"]["POST"] = launchApp;
+    server.resource["^/api/apps/reorder$"]["POST"] = reorderApps;
     server.resource["^/api/clients/list$"]["GET"] = getClients;
     server.resource["^/api/clients/unpair$"]["POST"] = unpair;
     server.resource["^/api/clients/unpair-all$"]["POST"] = unpairAll;

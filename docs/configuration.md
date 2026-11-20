@@ -3608,6 +3608,47 @@ consent prompt for directory ACLs, so the Web UI shows setup steps for correctin
     </tr>
 </table>
 
+### vt_software
+
+<table>
+    <tr>
+        <td>Description</td>
+        <td colspan="2">
+            Controls whether VideoToolbox may use its software encoder.
+            @note{This option only applies when using macOS. VideoToolbox's software encoder is much slower than Sunshine's own software encoder, so @code{auto} and @code{disabled} require hardware and fall back to the configured software encoder when it is unavailable.}
+        </td>
+    </tr>
+    <tr>
+        <td>Default</td>
+        <td colspan="2">@code{}
+            auto
+            @endcode</td>
+    </tr>
+    <tr>
+        <td>Example</td>
+        <td colspan="2">@code{}
+            vt_software = auto
+            @endcode</td>
+    </tr>
+    <tr>
+        <td rowspan="4">Choices</td>
+        <td>auto</td>
+        <td>require hardware; fall back to Sunshine's software encoder</td>
+    </tr>
+    <tr>
+        <td>disabled</td>
+        <td>same as <code>auto</code></td>
+    </tr>
+    <tr>
+        <td>allowed</td>
+        <td>let VideoToolbox choose hardware or software</td>
+    </tr>
+    <tr>
+        <td>forced</td>
+        <td>require VideoToolbox's software encoder</td>
+    </tr>
+</table>
+
 ### vt_realtime
 
 <table>

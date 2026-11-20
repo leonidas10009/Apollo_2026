@@ -86,9 +86,25 @@
           {{ $t('pin.generate_pin') }}
         </button>
       </div>
-      <div v-if="otp" class="card flex-column d-flex p-4 mb-4 text-center">
-        <h2 class="display-4">{{ otp }}</h2>
-        <a v-if="hostAddr && hostPort" :href="deepLink" class="text-break">{{ deepLink }}</a>
+      <div v-if="otp || otpExpired" class="card flex-column d-flex p-4 mb-4 text-center">
+        <div v-show="otp && hostAddr" ref="qrContainer" class="pin-qr bg-white p-2 rounded mx-auto mb-3"></div>
+        <h2 class="display-4">{{ otpExpired ? $t('pin.otp_expired') : otp }}</h2>
+        <div v-if="otp && hostAddr && !editingHost" class="d-flex align-items-center justify-content-center gap-2">
+          <a :href="deepLink" class="text-break">art://{{ hostAddr }}:{{ hostPort }}</a>
+          <button type="button" class="btn btn-sm btn-outline-secondary" :title="$t('apps.edit')"
+                  :aria-label="$t('apps.edit')" @click="editHost">
+            <pencil :size="16" class="icon"></pencil>
+          </button>
+        </div>
+        <div v-else-if="otp && editingHost" class="d-flex flex-column gap-2">
+          <label class="visually-hidden" for="otp-host-address">{{ $t('pin.host_address') }}</label>
+          <input id="otp-host-address" v-model="hostAddr" class="form-control" :placeholder="$t('pin.host_address')" />
+          <label class="visually-hidden" for="otp-host-port">{{ $t('pin.host_port') }}</label>
+          <input id="otp-host-port" v-model="hostPort" inputmode="numeric" class="form-control" :placeholder="$t('pin.host_port')" />
+          <button type="button" class="btn btn-primary" :disabled="!canSaveHost" @click="saveHost">
+            {{ $t('_common.save') }}
+          </button>
+        </div>
       </div>
       <div v-if="otpMessage" class="alert" :class="`alert-${otpStatus}`">{{ otpMessage }}</div>
       <div class="alert alert-info">{{ $t('pin.otp_msg') }}</div>
@@ -111,6 +127,7 @@
     Hash,
     KeyRound,
     Monitor,
+    Pencil,
     UserRoundSearch,
     X,
   } from '@lucide/vue'
@@ -121,6 +138,7 @@
       Hash,
       KeyRound,
       Monitor,
+      Pencil,
       UserRoundSearch,
       X,
     },
@@ -129,16 +147,20 @@
       return {
         currentTab: 'pin',
         deviceName: '',
+        editingHost: false,
         hostAddr: '',
         hostName: '',
         hostPort: '',
         name: '',
         otp: '',
+        otpExpired: false,
         otpMessage: '',
         otpStatus: 'warning',
+        otpTimer: null,
         passphrase: '',
         pendingPairings: [],
         pin: '',
+        qrRenderedFor: '',
         refreshTimer: null,
         selectedPairingId: '',
         status: null,
@@ -148,6 +170,18 @@
       deepLink() {
         return `art://${this.hostAddr}:${this.hostPort}?pin=${encodeURIComponent(this.otp)}&passphrase=${encodeURIComponent(this.passphrase)}&name=${encodeURIComponent(this.hostName)}`;
       },
+      /**
+       * A host can only be saved when the address is present and the port is a valid TCP port.
+       */
+      canSaveHost() {
+        const port = Number.parseInt(this.hostPort, 10);
+        return Boolean(this.hostAddr) && Number.isInteger(port) && port >= 1 && port <= 65535;
+      },
+    },
+    watch: {
+      deepLink() {
+        this.$nextTick(() => this.renderQR());
+      },
     },
     mounted() {
       this.loadPendingPairings();
@@ -155,6 +189,7 @@
     },
     beforeUnmount() {
       window.clearInterval(this.refreshTimer);
+      this.clearOtpExpiryTimer();
     },
     methods: {
       /**
@@ -179,12 +214,121 @@
       },
 
       /**
+       * Read the host the operator previously confirmed, if any.
+       */
+      readHostCache() {
+        try {
+          const cached = JSON.parse(globalThis.sessionStorage?.getItem('hostInfo'));
+          if (cached && typeof cached.hostAddr === 'string' && cached.hostAddr) {
+            return cached;
+          }
+        } catch (error) {
+          console.debug('Ignoring invalid cached host information', error);
+        }
+        return null;
+      },
+
+      /**
+       * Remember a manually confirmed host for the rest of the browser session.
+       */
+      writeHostCache() {
+        try {
+          globalThis.sessionStorage?.setItem('hostInfo', JSON.stringify({
+            hostAddr: this.hostAddr,
+            hostPort: String(this.hostPort),
+          }));
+        } catch (error) {
+          console.debug('Unable to cache host information', error);
+        }
+      },
+
+      /**
+       * Draw the pairing QR code for the current deep link.
+       */
+      renderQR() {
+        const container = this.$refs.qrContainer;
+        if (!container || !this.otp || !this.hostAddr || typeof QRCode === 'undefined') {
+          return;
+        }
+
+        const deepLink = this.deepLink;
+        if (this.qrRenderedFor === deepLink) {
+          return;
+        }
+
+        container.innerHTML = '';
+        // qrcodejs renders a canvas and an img fallback into the supplied container.
+        new QRCode(container, {
+          text: deepLink,
+          width: 192,
+          height: 192,
+          correctLevel: QRCode.CorrectLevel.M,
+        });
+        this.qrRenderedFor = deepLink;
+      },
+
+      /**
+       * Toggle manual host editing and restore the last confirmed values.
+       */
+      editHost() {
+        if (!this.editingHost) {
+          const cached = this.readHostCache();
+          if (cached) {
+            this.hostAddr = cached.hostAddr;
+            this.hostPort = cached.hostPort;
+          }
+        }
+        this.editingHost = !this.editingHost;
+      },
+
+      /**
+       * Confirm the manually entered host and refresh the QR code.
+       */
+      saveHost() {
+        if (!this.canSaveHost) {
+          return;
+        }
+        this.writeHostCache();
+        this.editingHost = false;
+        this.$nextTick(() => this.renderQR());
+      },
+
+      /**
+       * Expire the displayed OTP after the three minutes the server honours it.
+       */
+      startOtpExpiryTimer() {
+        this.clearOtpExpiryTimer();
+        this.otpTimer = globalThis.setTimeout(() => {
+          this.otpTimer = null;
+          this.otp = '';
+          this.otpExpired = true;
+          this.qrRenderedFor = '';
+          this.otpStatus = 'warning';
+          this.otpMessage = this.i18n.t('pin.otp_expired_msg');
+        }, 3 * 60 * 1000);
+      },
+
+      clearOtpExpiryTimer() {
+        if (this.otpTimer !== null) {
+          globalThis.clearTimeout(this.otpTimer);
+          this.otpTimer = null;
+        }
+      },
+
+      /**
        * Request a one-time pairing PIN for Artemis clients.
        */
       async requestOTP() {
+        if (this.editingHost) {
+          return;
+        }
+
         this.status = null;
         this.otpMessage = '';
         this.otp = '';
+        this.otpExpired = false;
+        this.qrRenderedFor = '';
+        this.clearOtpExpiryTimer();
 
         try {
           const response = await apiFetch('./api/otp', {
@@ -207,11 +351,26 @@
           this.otp = result.otp;
           this.hostName = result.name || '';
           const isLocalHost = ['localhost', '127.0.0.1', '[::1]'].includes(globalThis.location.hostname);
-          this.hostAddr = isLocalHost ? (result.ip || globalThis.location.hostname) : globalThis.location.hostname;
-          const webPort = Number.parseInt(globalThis.location.port, 10);
-          this.hostPort = Number.isFinite(webPort) && webPort > 0 ? webPort - 1 : 47989;
+          const cachedHost = this.readHostCache();
+          if (cachedHost) {
+            this.hostAddr = cachedHost.hostAddr;
+            this.hostPort = String(cachedHost.hostPort);
+          } else {
+            this.hostAddr = isLocalHost ? (result.ip || globalThis.location.hostname) : globalThis.location.hostname;
+            const webPort = Number.parseInt(globalThis.location.port, 10);
+            this.hostPort = Number.isFinite(webPort) && webPort > 0 ? String(webPort - 1) : '47989';
+          }
           this.otpStatus = 'success';
           this.otpMessage = this.i18n.t('pin.otp_success');
+          this.startOtpExpiryTimer();
+
+          if (!isLocalHost && this.hostAddr) {
+            globalThis.setTimeout(() => {
+              if (globalThis.confirm(this.i18n.t('pin.otp_pair_now'))) {
+                globalThis.open(this.deepLink);
+              }
+            }, 0);
+          }
         } catch (error) {
           console.error('Failed to request OTP', error);
           this.otpStatus = 'danger';
@@ -276,3 +435,14 @@
     }
   }
 </script>
+
+<style scoped>
+.pin-qr {
+  width: fit-content;
+}
+
+.pin-qr :deep(img),
+.pin-qr :deep(canvas) {
+  display: block;
+}
+</style>

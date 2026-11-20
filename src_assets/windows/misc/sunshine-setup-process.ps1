@@ -207,7 +207,7 @@ function Invoke-ScriptIfExist {
         -FailureTarget $ScriptPath
 }
 
-# Execute sunshine.exe with arguments if it exists.
+# Execute apollo.exe with arguments if it exists.
 function Invoke-SunshineIfExist {
     <#
     .SYNOPSIS
@@ -228,7 +228,7 @@ function Invoke-SunshineIfExist {
         [string]$Emoji = "🔧"
     )
 
-    $SunshinePath = Join-Path $RootDir "sunshine.exe"
+    $SunshinePath = Join-Path $RootDir "apollo.exe"
     return Invoke-ExecutableIfExist `
         -ExecutablePath $SunshinePath `
         -Arguments $Arguments `

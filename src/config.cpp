@@ -549,6 +549,36 @@ namespace config {
       return 1;
     }
 
+    /**
+     * @brief Enumerates the VideoToolbox hardware-acceleration policies.
+     */
+    enum software_e : int {
+      sw_auto = 0,  ///< Hardware only; fall back to Sunshine's software encoder.
+      sw_disabled,  ///< Hardware only; same as auto.
+      sw_allowed,  ///< Let VideoToolbox choose hardware or software.
+      sw_forced  ///< Require VideoToolbox's software encoder.
+    };
+
+    /**
+     * @brief Parse the VideoToolbox software-encoder policy.
+     *
+     * @param software Policy selected in the configuration.
+     * @return Parsed enum value; unknown text uses the automatic policy.
+     */
+    int software_from_view(const std::string_view &software) {
+      if (software == "disabled"sv || software == "off"sv || software == "0"sv) {
+        return sw_disabled;
+      }
+      if (software == "allowed"sv || software == "enabled"sv || software == "on"sv || software == "1"sv) {
+        return sw_allowed;
+      }
+      if (software == "forced"sv || software == "required"sv || software == "2"sv) {
+        return sw_forced;
+      }
+
+      return sw_auto;
+    }
+
   }  // namespace vt
 
   namespace sw {
@@ -1794,6 +1824,7 @@ namespace config {
 
     int_f(vars, "vt_coder", video.vt.vt_coder, vt::coder_from_view);
     int_f(vars, "vt_realtime", video.vt.vt_realtime, vt::rt_from_view);
+    int_f(vars, "vt_software", video.vt.vt_software, vt::software_from_view);
 
     std::string vaapi_quality;
     string_f(vars, "vaapi_quality", vaapi_quality);
@@ -1978,6 +2009,12 @@ namespace config {
     bool_f(vars, "motion_as_ds4", input.motion_as_ds4);
     bool_f(vars, "touchpad_as_ds4", input.touchpad_as_ds4);
     bool_f(vars, "virtualhid_randomize_mac", input.virtualhid_randomize_mac);
+    if (vars.find("virtualhid_randomize_mac") == vars.end()) {
+      // Apollo originally exposed this setting only for inputtino gamepads. Accept the
+      // legacy key for existing configurations without advertising it as a new option.
+      const std::string legacy_randomize_mac_key = "ds5_inputtino_randomize_mac";
+      bool_f(vars, legacy_randomize_mac_key, input.virtualhid_randomize_mac);
+    }
 
     bool_f(vars, "mouse", input.mouse);
     bool_f(vars, "keyboard", input.keyboard);
@@ -2197,7 +2234,7 @@ namespace config {
     // so that service instance will do the work instead.
 
     if (!config_loaded && !shortcut_launch) {
-      BOOST_LOG(fatal) << "To relaunch Apollo successfully, use the shortcut in the Start Menu. Do not run sunshine.exe manually."sv;
+      BOOST_LOG(fatal) << "To relaunch Apollo successfully, use the shortcut in the Start Menu. Do not run apollo.exe manually."sv;
       std::this_thread::sleep_for(10s);
 #else
     if (!config_loaded) {

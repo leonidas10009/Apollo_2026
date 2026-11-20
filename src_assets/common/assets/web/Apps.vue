@@ -3,6 +3,8 @@
     <div class="my-4">
       <h1>{{ $t('apps.applications_title') }}<span v-if="apps.length"> ({{ appCountLabel }})</span></h1>
       <p>{{ $t('apps.applications_desc') }}</p>
+      <p class="mb-1">{{ $t('apps.applications_reorder_desc') }}</p>
+      <p class="text-muted small mb-0" style="white-space: pre-wrap">{{ $t('apps.applications_tips') }}</p>
     </div>
 
     <!-- Actions toolbar -->
@@ -16,7 +18,19 @@
         </button>
       </div>
       <!-- Right side actions -->
-      <div class="d-flex align-items-center gap-2" v-if="apps && apps.length > 0">
+      <div class="d-flex flex-wrap align-items-center gap-2" v-if="apps && apps.length > 0">
+        <!-- Save manual order -->
+        <button v-if="listReordered" class="btn btn-warning text-nowrap" type="button"
+                :disabled="savingOrder" @click="saveOrder">
+          <save :size="16" class="icon me-1"></save>
+          {{ $t('apps.save_order') }}
+        </button>
+        <!-- Alphabetize the persisted order -->
+        <button v-else-if="apps.length > 1" class="btn btn-outline-secondary text-nowrap" type="button"
+                @click="alphabetizeApps">
+          <arrow-down :size="16" class="icon me-1"></arrow-down>
+          {{ $t('apps.alphabetize') }}
+        </button>
         <!-- Sort by name toggle -->
         <button class="btn btn-outline-secondary text-nowrap" type="button" @click="toggleSort"
                 :class="{ active: sortMode !== 'default' }"
@@ -43,7 +57,17 @@
 
     <!-- Apps Grid -->
     <div class="row g-3" v-if="displayedApps.length > 0">
-      <div class="col-12 col-sm-6 col-md-4 col-lg-3" v-for="{ app, index } in displayedApps" :key="index">
+      <div class="col-12 col-sm-6 col-md-4 col-lg-3"
+           v-for="{ app, index } in displayedApps"
+           :key="app.uuid || index"
+           :draggable="canReorder"
+           :class="{ 'app-dragover': dragOverIndex === index }"
+           @dragstart="onDragStart($event, index)"
+           @dragenter.prevent="onDragEnter(index)"
+           @dragover.prevent="onDragOver"
+           @dragleave="onDragLeave(index)"
+           @drop.prevent="onDrop($event, index)"
+           @dragend="onDragEnd">
         <div class="card app-card h-100">
           <div class="app-poster-container">
             <img
@@ -75,7 +99,8 @@
             </div>
           </div>
           <div class="card-body d-flex flex-column">
-            <h5 class="card-title mb-3">{{ app.name }}</h5>
+            <h5 class="card-title mb-3" :title="$t('apps.export_launcher_file')"
+                @dblclick="exportLauncherFile(app)">{{ app.name }}</h5>
             <div class="mt-auto app-card-actions">
               <button v-if="currentApp === app.uuid" class="btn btn-sm btn-warning flex-fill" @click="closeApp">
                 <square :size="16" class="icon"></square>
@@ -97,6 +122,13 @@
               </button>
             </div>
           </div>
+        </div>
+      </div>
+      <div v-if="canReorder && draggingApp >= 0" class="col-12">
+        <div class="app-drop-end text-center text-muted small py-3 rounded"
+             @dragover.prevent="onDragOver"
+             @drop.prevent="onDropAtEnd">
+          {{ $t('apps.drop_at_end') }}
         </div>
       </div>
     </div>
@@ -468,6 +500,11 @@
           </div>
           <!-- Save buttons -->
           <div class="modal-footer">
+            <button v-if="editForm.index !== -1" class="btn btn-outline-secondary me-auto"
+                    :disabled="!editForm.uuid" @click="exportLauncherFile(editForm)">
+              <file-text :size="18" class="icon"></file-text>
+              {{ $t('apps.export_launcher_file') }}
+            </button>
             <button @click="closeEditModal" class="btn btn-secondary">
               <x :size="18" class="icon"></x>
               {{ $t('_common.cancel') }}
@@ -783,6 +820,10 @@
         fileBrowserTypedPath: "",
         searchQuery: "",
         sortMode: "default",
+        draggingApp: -1,
+        dragOverIndex: -1,
+        listReordered: false,
+        savingOrder: false,
         deleteTarget: null,
         version: null,
         githubVersion: null,
@@ -801,6 +842,12 @@
       documentationBaseUrl() {
         const docsVersion = this.installedVersionNotStable ? 'master' : 'latest'
         return `https://docs.lizardbyte.dev/projects/sunshine/${docsVersion}`
+      },
+      /**
+       * Drag-to-reorder is only meaningful when the card order matches the persisted order.
+       */
+      canReorder() {
+        return this.apps.length > 1 && this.sortMode === 'default' && !this.searchQuery;
       },
       displayedApps() {
         let list = this.apps.map((app, index) => ({ app, index }));
@@ -954,6 +1001,7 @@
             this.currentApp = r.current_app || "";
             this.hostUUID = r.host_uuid || "";
             this.hostName = r.host_name || "";
+            this.listReordered = false;
           });
       },
       launchUrl(app) {
@@ -1260,6 +1308,132 @@
         else
           this.sortMode = "default";
       },
+      /**
+       * Start dragging an application only when the visible order is the persisted order.
+       */
+      onDragStart(event, index) {
+        if (!this.canReorder) {
+          event.preventDefault();
+          return;
+        }
+        this.draggingApp = index;
+        this.dragOverIndex = index;
+        if (event.dataTransfer) {
+          event.dataTransfer.effectAllowed = "move";
+          event.dataTransfer.setData("text/plain", String(index));
+        }
+      },
+      onDragEnter(index) {
+        if (this.draggingApp >= 0) {
+          this.dragOverIndex = index;
+        }
+      },
+      onDragOver(event) {
+        if (this.draggingApp >= 0) {
+          event.preventDefault();
+          if (event.dataTransfer) {
+            event.dataTransfer.dropEffect = "move";
+          }
+        }
+      },
+      onDragLeave(index) {
+        if (this.dragOverIndex === index) {
+          this.dragOverIndex = -1;
+        }
+      },
+      onDrop(event, index) {
+        event.preventDefault();
+        const from = this.draggingApp;
+        this.onDragEnd();
+        if (!this.canReorder || from < 0 || from === index) {
+          return;
+        }
+
+        const [moved] = this.apps.splice(from, 1);
+        const target = index > from ? index - 1 : index;
+        this.apps.splice(target, 0, moved);
+        this.listReordered = true;
+      },
+      onDragEnd() {
+        this.draggingApp = -1;
+        this.dragOverIndex = -1;
+      },
+      /**
+       * Move the dragged application to the end of the persisted order.
+       */
+      onDropAtEnd(event) {
+        event.preventDefault();
+        const from = this.draggingApp;
+        this.onDragEnd();
+        if (!this.canReorder || from < 0 || from === this.apps.length - 1) {
+          return;
+        }
+
+        const [moved] = this.apps.splice(from, 1);
+        this.apps.push(moved);
+        this.listReordered = true;
+      },
+      /**
+       * Sort the persisted order alphabetically; the operator must still save the order.
+       */
+      alphabetizeApps() {
+        const sorted = [...this.apps].sort((a, b) =>
+          (a.name || "").localeCompare(b.name || "", undefined, { sensitivity: "base" })
+        );
+        if (sorted.every((app, index) => app === this.apps[index])) {
+          window.alert(this.$t("apps.already_ordered"));
+          return;
+        }
+        this.apps = sorted;
+        this.listReordered = true;
+      },
+      /**
+       * Persist the current application order without interrupting a running stream.
+       */
+      saveOrder() {
+        this.savingOrder = true;
+        const order = this.apps.filter(app => app.uuid).map(app => app.uuid);
+        return apiFetch("./api/apps/reorder", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({order}),
+        })
+          .then((response) => response.json())
+          .then((result) => {
+            if (!result.status) {
+              throw new Error(result.error || `HTTP ${result.status_code || 400}`);
+            }
+            return this.loadApps();
+          })
+          .catch((error) => {
+            window.alert(this.$t("apps.reorder_failed") + (error.message || ""));
+          })
+          .finally(() => {
+            this.savingOrder = false;
+          });
+      },
+      /**
+       * Export an Artemis launcher entry for the selected application.
+       */
+      exportLauncherFile(app) {
+        if (!app || !app.uuid) {
+          return;
+        }
+        const fileContent = `# Artemis app entry
+# Exported by Apollo
+# https://github.com/leonidas10009/Apollo_2026
+
+[host_uuid] ${this.hostUUID}
+[host_name] ${this.hostName}
+[app_uuid] ${app.uuid}
+[app_name] ${app.name}
+`;
+        const safeName = (app.name || "app").replaceAll(/[\\/:*?"<>|]/g, "_");
+        const link = document.createElement("a");
+        link.href = `data:text/plain;charset=utf-8,${encodeURIComponent(fileContent)}`;
+        link.download = `${safeName}.art`;
+        link.click();
+      },
       openEditModal() {
         // Use $nextTick because if the edit version of the modal is created too early, it breaks...
         this.$nextTick(() => {
@@ -1289,3 +1463,15 @@
     },
   }
 </script>
+
+<style scoped>
+.app-dragover .app-card {
+  outline: 3px solid var(--bs-primary);
+  outline-offset: 2px;
+}
+
+.app-drop-end {
+  border: 2px dashed var(--bs-secondary-border-subtle, var(--bs-secondary));
+  background-color: var(--bs-tertiary-bg, transparent);
+}
+</style>

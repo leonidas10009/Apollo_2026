@@ -130,6 +130,7 @@ namespace config {
     struct {
       int vt_realtime;  ///< Whether VideoToolbox uses realtime encoding mode.
       int vt_coder;  ///< VideoToolbox entropy-coding mode.
+      int vt_software;  ///< Apollo: VideoToolbox hardware-acceleration policy (0 = auto, 1 = disabled, 2 = allowed, 3 = forced).
     } vt;  ///< VideoToolbox encoder options.
 
     struct {

@@ -11,6 +11,7 @@
 #include "../tests_common.h"
 
 // standard includes
+#include <algorithm>
 #include <array>
 #include <chrono>
 #include <filesystem>
@@ -345,6 +346,7 @@ protected:
     server->resource["^/pairing-test$"]["POST"] = confighttp::savePin;
     server->resource["^/portal-token-reset-test$"]["POST"] = confighttp::resetPortalToken;
     server->resource["^/api/apps$"]["POST"] = confighttp::saveApp;
+    server->resource["^/api/apps/reorder$"]["POST"] = confighttp::reorderApps;
     server->default_resource["GET"] = confighttp::getFallbackPage;
 
     // Start server
@@ -2175,6 +2177,44 @@ TEST_F(ConfigHttpTest, SaveAppNormalizesOptionalImagePath) {
   }
 }
 
+TEST_F(ConfigHttpTest, ReorderAppsPersistsManualOrderAndKeepsUnknownApps) {
+  using json = nlohmann::json;
+  ScopedSaveAppAppsFile apps_file("reorder_apps");
+  {
+    std::ofstream file(config::stream.file_apps);
+    file << json {
+      {"version", 2},
+      {"env", json::object()},
+      {"apps", json::array({
+        json {{"name", "Alpha"}, {"uuid", "11111111-1111-1111-1111-111111111111"}},
+        json {{"name", "Bravo"}, {"uuid", "22222222-2222-2222-2222-222222222222"}},
+        json {{"name", "Charlie"}, {"uuid", "33333333-3333-3333-3333-333333333333"}},
+      })}
+    }.dump();
+  }
+
+  const auto headers = authenticated_json_headers();
+  const json request_body {
+    {"order", json::array({
+      "33333333-3333-3333-3333-333333333333",
+      "11111111-1111-1111-1111-111111111111",
+    })}
+  };
+  const auto response = client->request("POST", "/api/apps/reorder", request_body.dump(), headers);
+  ASSERT_EQ(response->status_code, "200 OK");
+  EXPECT_TRUE(json::parse(response->content.string()).at("status").get<bool>());
+
+  std::ifstream file(config::stream.file_apps);
+  const auto saved = json::parse(file);
+  ASSERT_EQ(saved.at("apps").size(), 3U);
+  EXPECT_EQ(saved.at("apps").at(0).at("name"), "Charlie");
+  EXPECT_EQ(saved.at("apps").at(1).at("name"), "Alpha");
+  EXPECT_EQ(saved.at("apps").at(2).at("name"), "Bravo");
+
+  const auto invalid_response = client->request("POST", "/api/apps/reorder", R"({"order":"invalid"})", headers);
+  EXPECT_EQ(invalid_response->status_code, "400 Bad Request");
+}
+
 TEST_F(ConfigHttpTest, SaveAppOmitsNullOptionalFieldsAndPreservesConfiguredValues) {
   using json = nlohmann::json;
   ScopedSaveAppAppsFile apps_file("save_app_optional_fields");
@@ -2233,7 +2273,11 @@ TEST_F(ConfigHttpTest, SaveAppOmitsNullOptionalFieldsAndPreservesConfiguredValue
     ASSERT_EQ(saved.at("apps").size(), 2U);
     json expected = configured;
     expected.erase("index");
-    auto saved_app = saved.at("apps").at(0);
+    const auto configured_it = std::ranges::find_if(saved.at("apps"), [](const json &app) {
+      return app.at("name") == "Configured";
+    });
+    ASSERT_NE(configured_it, saved.at("apps").end());
+    auto saved_app = *configured_it;
     saved_app.erase("uuid");
     EXPECT_EQ(saved_app, expected);
   }

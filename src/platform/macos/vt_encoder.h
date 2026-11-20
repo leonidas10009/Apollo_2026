@@ -41,6 +41,23 @@ namespace platf::vt {
   bool try_low_latency(CMVideoCodecType codec, bool arm64);
 
   /**
+   * @brief VideoToolbox hardware-acceleration policy selected by `vt_software`.
+   */
+  enum class software_policy_e {
+    hardware_only,  ///< Require hardware; fall back to Sunshine's software encoder when unavailable.
+    allowed,  ///< Let VideoToolbox choose between hardware and software.
+    forced  ///< Require VideoToolbox's software encoder.
+  };
+
+  /**
+   * @brief Map the `vt_software` setting to an encoder-selection policy.
+   *
+   * @param software Value of `config::video.vt.vt_software` (2 = allowed, 3 = forced, anything else = hardware only).
+   * @return Policy applied to the compression session specification.
+   */
+  software_policy_e software_policy(int software);
+
+  /**
    * @brief Map the `vt_coder` setting to an H.264 entropy mode.
    *
    * @param coder Value of `config::video.vt.vt_coder` (1 = CABAC, 2 = CAVLC, anything else = auto).
