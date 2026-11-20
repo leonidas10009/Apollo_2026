@@ -29,11 +29,13 @@ The full Git history, authorship, GPL-3.0 license, and upstream notices are reta
 
 ## Current status
 
-**Apollo 2026 1.0.0** is the current release, based on Sunshine `2026.1116.25010`.
+**Apollo 2026 1.0.1** is the current release, based on Sunshine `2026.1116.25010`.
 
 - Windows binaries: `apollo.exe`, NSIS installer and portable ZIP.
-- Native tests: **942 tests / 931 pass / 11 skipped / 0 failed**.
-- Web UI: **238 tests pass**; `npm audit` reports 0 vulnerabilities.
+- Native tests: **943 tests / 930 pass / 13 skipped / 0 failed** (last recorded run).
+- Web UI: **248 tests pass**; `npm audit` reports 0 vulnerabilities.
+- Remote server commands: authenticated `POST /servercmd?index=N` for power actions
+  from Artemis without starting a stream.
 - SudoVDA is bundled and installed by the Windows installer.
 - Virtual HID Broker is optional and requires a paid machine license.
 - ViGEmBus 1.22.0 can be installed separately as a free Xbox 360/DS4 fallback.

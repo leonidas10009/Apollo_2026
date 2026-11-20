@@ -9,9 +9,10 @@
 | Item | Value |
 |---|---|
 | Product | Apollo 2026 |
-| Version | **1.0.0** |
+| Version | **1.0.1** |
 | Upstream base | Sunshine `2026.1116.25010` (`5716a2ac`) |
-| Git tag | **`v1.0.0`** at `a4c0d637` |
+| Git tag | **`v1.0.1`** at `60143517` |
+| GitHub release | https://github.com/leonidas10009/Apollo_2026/releases/tag/v1.0.1 |
 | Windows executable | `apollo.exe` (internal CMake target `sunshine`) |
 | Publisher metadata | Apollo 2026 — https://github.com/leonidas10009/Apollo_2026 |
 | License | GPL-3.0-only |
@@ -20,9 +21,9 @@
 
 | Artifact | Size | SHA-256 |
 |---|---:|---|
-| `apollo.exe` | 238,366,466 B | `464BF906F4BA681CF602EEC8BCDAB8382164D52D030E06692C7322F21A087D2A` |
-| `Apollo-1.0.0-win64-setup.exe` (NSIS) | 45,692,784 B | `3CBB951098FFCBCD13A4A8090557DCBD6D0FA0FED86288345B57C9078AD2011C` |
-| `Apollo-1.0.0-win64-portable.zip` | 62,806,439 B | `0B6606D97EC4A83555F65CE54A64D4C844B229BBF66EBFBA5E2EA0EA0A06E311` |
+| `apollo.exe` | 238,372,486 B | `05147916E64541F6F8CD117F03B097E4099ACF46A2A7FD5951E43AA8C3A37D41` |
+| `Apollo-1.0.1-win64-setup.exe` (NSIS) | 45,701,310 B | `C1544FA36B6191190C250718823517F3096D9AB9D5D73C01687D09CDB9D0CF67` |
+| `Apollo-1.0.1-win64-portable.zip` | 62,809,252 B | `7A1BA3B54DCFF1C71CC9CDAB40876EF58021ED43B2CD2189F17E094DFCB22E15` |
 
 The portable package and installer include `LICENSE`, `NOTICE`, `CREDITS.md`,
 `assets`, the SudoVDA driver package, setup scripts, `tools` and `zlib1.dll`.
@@ -32,19 +33,20 @@ The portable package and installer include `LICENSE`, `NOTICE`, `CREDITS.md`,
 | Area | Result |
 |---|---|
 | Native build | Windows 11 / MSYS2 UCRT64 / GCC 16.2 / Ninja / Release |
-| C++ tests | **942 tests / 931 pass / 11 skipped / 0 failed** |
-| Web tests | **17 files / 238 tests pass** |
+| C++ tests | **943 tests / 930 pass / 13 skipped / 0 failed** (last recorded run) |
+| Web tests | **17 files / 248 tests pass** (last recorded run) |
 | npm audit | **0 vulnerabilities** |
 | Conflict markers | None |
 | Locale JSON | All parse |
 | `git diff --check` | Clean |
-| `apollo.exe --version` | `1.0.0`, commit `a4c0d637`, publisher Apollo 2026 |
+| `apollo.exe --version` | `1.0.1`, commit `60143517`, publisher Apollo 2026 |
+| HTTPS `/servercmd` | Paired client cert + `server_cmd` required; unauthenticated connection aborted |
 | Host runtime smoke test | Ports `47984/47989/47990/48010` listening; `/api/config` 200 with auth |
 | Virtual display driver | SudoVDA installed; `SudoMaker Virtual Display Adapter` present |
 | ViGEmBus | 1.22.0 installed and running; XInput loopback test passes |
 | Virtual HID Broker | Installed, service running, version compatible, license `unlicensed` |
 
-The 11 skipped C++ tests are platform/hardware/session gated (tray screenshots,
+The 13 skipped C++ tests are platform/hardware/session gated (tray screenshots,
 AMD/Intel encoders absent on this host, absolute mouse behavior, Flatpak/Linux,
 Virtual HID Broker without a license).
 
@@ -59,6 +61,8 @@ Virtual HID Broker without a license).
   drag-and-drop, Alphabetize, Save Order, `.art` launcher export.
 - Pairing: legacy PIN and OTP with QR, manual host/port, 3-minute expiry.
 - Global prep/state/server commands.
+- Remote server commands without a stream: authenticated `POST /servercmd?index=N`,
+  used by Artemis for shutdown/restart/cancel actions.
 - Virtual display via SudoVDA, including HDR and per-client identity.
 - Gamepad backends:
   - Virtual HID Broker (libvirtualhid) with license management.
@@ -100,7 +104,7 @@ backends. It is not yet wired into Apollo's main build. See
 [apollo-input.md](apollo-input.md).
 
 > The library was added to `main` after the `v1.0.0` tag; it is not part of the
-> 1.0.0 installer. A future release can integrate it into the host build.
+> 1.0.0 or 1.0.1 installers. A future release can integrate it into the host build.
 
 ## Known limitations and open work
 
@@ -111,7 +115,7 @@ backends. It is not yet wired into Apollo's main build. See
 | High | NSIS installer on a clean machine | Install, upgrade, uninstall, SudoVDA |
 | Medium | Virtual HID Broker license | Needed for DualSense/Switch Pro/adaptive triggers/IMU on Windows |
 | Medium | Code signing | `.exe` and installer are unsigned |
-| Medium | Publish `main` + `v1.0.0` | Not pushed to `apollo2026` yet |
+| Medium | End-to-end power actions from Artemis | Test `/servercmd` with a paired device and `server_cmd`; verify shutdown, restart and cancel |
 | Medium | Integrate `apollo-input` into Apollo | Optional; current host input still uses `src/platform/windows/input.cpp` |
 | Medium | Native CI + release automation | Current CI covers Web UI, Pester and structure only |
 | Low | macOS `vt_software` | Not tested on macOS hardware |
@@ -120,7 +124,7 @@ backends. It is not yet wired into Apollo's main build. See
 
 ## How to run a real test
 
-1. Install Apollo with `Apollo-1.0.0-win64-setup.exe` or extract the portable ZIP.
+1. Install Apollo with `Apollo-1.0.1-win64-setup.exe` or extract the portable ZIP.
 2. Open `https://<host>:47990/welcome` and create credentials.
 3. Allow `apollo.exe` in Windows Firewall and use a Private network profile.
 4. Add the host in Artemis (automatic discovery or manual IP).

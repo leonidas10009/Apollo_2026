@@ -1,5 +1,21 @@
 # Changelog
 
+## Apollo 2026 1.0.1 — 2026-11-20
+
+Maintenance release focused on remote power control.
+
+- Added authenticated `POST /servercmd?index=N` on the GameStream HTTPS server to run
+  an entry from `server_cmd` without an active stream. Requires a paired client
+  certificate and the `server_cmd` permission.
+- Refactored `server_cmd` execution into `stream::execute_server_command()` and shared
+  it with the control stream.
+- Documented the endpoint, security requirements and a power-command example in
+  [configuration.md](configuration.md).
+- Artemis client: shut down / restart / cancel actions in the PC action sheet, with
+  confirmation and no stream required.
+- Version metadata: release builds now record the Git commit. Use Git for Windows when
+  configuring on Windows to avoid a false dirty tree from the MSYS2 Git submodule check.
+
 ## Apollo 2026 1.0.0 — 2026-11-20
 
 First stable Apollo 2026 release, based on Sunshine `2026.1116.25010`.
