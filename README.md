@@ -1,8 +1,20 @@
-# Apollo
+# Apollo 2026
 
-Apollo is a self-hosted desktop stream host for [Artemis(Moonlight Noir)](https://github.com/ClassicOldSong/moonlight-android). Offering low latency, native client resolution, cloud gaming server capabilities with support for AMD, Intel, and Nvidia GPUs for hardware encoding. Software encoding is also available. A web UI is provided to allow configuration and client pairing from your favorite web browser. Pair from the local server or any mobile device.
+[![Release](https://img.shields.io/github/v/release/leonidas10009/Apollo_2026?label=release)](https://github.com/leonidas10009/Apollo_2026/releases)
+[![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
+[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey)](https://github.com/leonidas10009/Apollo_2026/releases)
 
-Major features:
+**Apollo 2026** is a self-hosted, low-latency game streaming host for **Moonlight**, **Artemis 2026**, and **Sunshine** clients. It supports AMD, Intel, and NVIDIA hardware encoding, software encoding, native client resolution, HDR virtual displays, and a modern Web UI for pairing and configuration from any browser.
+
+**Companion Android client:** [Artemis 2026](https://github.com/leonidas10009/Artemis-2026), based on [Artemis / Moonlight Noir](https://github.com/ClassicOldSong/moonlight-android).
+
+## Downloads
+
+- [Apollo 2026 releases](https://github.com/leonidas10009/Apollo_2026/releases)
+- [Artemis 2026 Android client](https://github.com/leonidas10009/Artemis-2026/releases)
+- [Configuration reference](docs/configuration.md)
+
+## Major features:
 
 - [x] Built-in Virtual Display with HDR support that matches the resolution/framerate config of your client automatically
 - [x] Modern responsive Web UI with a host dashboard, sidebar navigation, command palette (`Ctrl+K`), and theme switcher
@@ -10,6 +22,28 @@ Major features:
 - [x] Clipboard sync
 - [x] Commands for client connection/disconnection (checkout [Auto pause/resume games](https://github.com/ClassicOldSong/Apollo/wiki/Auto-pause-resume-games))
 - [x] Input only mode
+
+## FAQ
+
+### What is Apollo 2026?
+
+Apollo 2026 is a self-hosted game streaming host for Windows and Linux. It streams a desktop or game to Moonlight-compatible clients, including the Artemis 2026 Android client, over the local network or the internet.
+
+### Does Apollo work with Moonlight and Artemis?
+
+Yes. Apollo works with Moonlight clients and with Artemis 2026. Artemis adds Apollo-specific features such as virtual display control, clipboard sync, server commands, and remote power actions.
+
+### Does Apollo support Android TV?
+
+Yes. Use the Artemis 2026 `arm64-v8a` or `armeabi-v7a` APK on Android TV/Google TV. The client includes a leanback launcher entry and does not require a touchscreen.
+
+### Which GPUs are supported?
+
+Apollo supports NVIDIA NVENC, AMD AMF, Intel Quick Sync, and software encoding. The Web UI shows the encoders available on the host.
+
+### Is Apollo free?
+
+Yes. Apollo 2026 is free and open source under GPL-3.0. Source code and releases are available on GitHub.
 
 ## Credits
 
