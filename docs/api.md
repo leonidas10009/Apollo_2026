@@ -50,6 +50,9 @@ curl -u user:pass -H "X-CSRF-Token: your_token_here" \
 ## POST /api/apps/launch
 @copydoc confighttp::launchApp()
 
+## POST /api/apps/reorder
+@copydoc confighttp::reorderApps()
+
 ## DELETE /api/apps/{index}
 @copydoc confighttp::deleteApp()
 

@@ -25,9 +25,12 @@ Apollo keeps the Sunshine 2026 streaming core and adds:
   overrides, virtual-display policy, and client connect/disconnect commands.
 - **App launch and close** from the Web UI, plus per-app virtual display, app identity,
   resolution scale factor, gamepad override, and resume/pause commands.
-- **OTP pairing** for Artemis clients, in addition to standard PIN pairing.
+- **Manual app ordering** with drag-and-drop, **Alphabetize**, **Save Order**, and `.art`
+  launcher-file export for Artemis and emulator frontends.
+- **OTP pairing** for Artemis clients, in addition to standard PIN pairing, with a scannable QR
+  code and an optional manual host/port override.
 - **Global prep/state/server commands** and Apollo audio/video options exposed in the
-  configuration UI.
+  configuration UI, including the VideoToolbox software-encoder policy on macOS.
 
 ## Binaries
 
