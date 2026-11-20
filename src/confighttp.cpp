@@ -38,6 +38,7 @@
 #ifdef _WIN32
   #include "platform/windows/misc.h"
   #include "platform/windows/utf_utils.h"
+  #include "platform/windows/utils.h"
 
   #include <Windows.h>
 #elif defined(__APPLE__)

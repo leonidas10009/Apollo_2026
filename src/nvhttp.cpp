@@ -203,9 +203,6 @@ namespace nvhttp {
 
   client_t client_root;  ///< In-memory representation of the paired-client database.
 
-
-  client_t client_root;  ///< In-memory representation of the paired-client database.
-
   // uniqueID, session
   std::unordered_map<std::string, pair_session_t, util::transparent_string_hash, std::equal_to<>> map_id_sess;  ///< Pairing sessions keyed by temporary unique ID.
 
@@ -261,7 +258,7 @@ namespace nvhttp {
    * @param default_value Value returned when the parameter is absent.
    * @return Query parameter value, default value, or an empty string.
    */
-  std::string get_arg(const args_t &args, const char *name, const char *default_value = nullptr) {
+  std::string get_arg(const args_t &args, const char *name, const char *default_value) {
     auto it = args.find(name);
     if (it == std::end(args)) {
       if (default_value != nullptr) {
@@ -1829,7 +1826,7 @@ namespace nvhttp {
     }
 
     host_audio = util::from_view(get_arg(args, "localAudioPlayMode"));
-    auto launch_session = make_launch_session(host_audio, is_input_only, args, named_cert_p);
+    auto launch_session = make_launch_session(host_audio, is_input_only, args, named_cert_p.get());
 
     auto encryption_mode = net::encryption_mode_for_address(request->remote_endpoint().address());
     if (!launch_session->rtsp_cipher && encryption_mode == config::ENCRYPTION_MODE_MANDATORY) {
@@ -1998,7 +1995,7 @@ namespace nvhttp {
     if (no_active_sessions && args.find("localAudioPlayMode"s) != std::end(args)) {
       host_audio = util::from_view(get_arg(args, "localAudioPlayMode"));
     }
-    auto launch_session = make_launch_session(host_audio, false, args, named_cert_p);
+    auto launch_session = make_launch_session(host_audio, false, args, named_cert_p.get());
 
     if (!proc::proc.allow_client_commands || !named_cert_p->allow_client_commands) {
       launch_session->client_do_cmds.clear();

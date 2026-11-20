@@ -1155,14 +1155,7 @@ namespace video {
         {"enforce_hrd"s, &config::video.amd.amd_enforce_hrd},
         {"max_au_size"s, &config::video.amd.amd_max_au_size},
       },
-      {
-        // SDR-specific options
-        {"profile"s, [](const config_t &cfg) {
-           if (cfg.profile == 66) return "baseline"s;
-           if (cfg.profile == 77) return "main"s;
-           return "high"s;
-         }},
-      },
+      {},  // SDR-specific options
       {},  // HDR-specific options
       {},  // YUV444 SDR-specific options
       {},  // YUV444 HDR-specific options

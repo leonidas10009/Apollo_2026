@@ -27,7 +27,7 @@ SET(CPACK_NSIS_EXTRA_INSTALL_COMMANDS
         IfFileExists \\\"$INSTDIR\\\\drivers\\\\sudovda\\\\install.bat\\\" 0 sudovda_missing
         nsExec::ExecToLog '\\\"$INSTDIR\\\\drivers\\\\sudovda\\\\install.bat\\\"'
         Pop $0
-        StrCmp $0 "0" sudovda_done
+        StrCmp $0 \\\"0\\\" sudovda_done
         IfSilent sudovda_done
         MessageBox MB_ICONEXCLAMATION|MB_OK \
           'SudoVDA driver installation failed. Virtual Display will not work until this is fixed.'

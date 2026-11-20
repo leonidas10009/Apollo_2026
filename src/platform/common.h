@@ -46,6 +46,10 @@ struct ID3D11Device;
 
 // Forward declarations of boost classes to avoid having to include boost headers
 // here, which results in issues with Windows.h and WinSock2.h include order.
+// Include the lightweight config header so the inline-namespace macro matches
+// the Boost.Process v1 headers regardless of include order.
+#include <boost/process/v1/detail/config.hpp>
+
 namespace boost {
   namespace asio {
     namespace ip {
@@ -57,16 +61,18 @@ namespace boost {
     class path;
   }
 
-  namespace process::v1 {
-    class child;
-    class group;
-    template<typename Char>
-    class basic_environment;
-    /**
-     * @brief Map of environment variable names to values.
-     */
-    using environment = basic_environment<char>;
-  }  // namespace process::v1
+  namespace process {
+    BOOST_PROCESS_V1_INLINE namespace v1 {
+      class child;
+      class group;
+      template<typename Char>
+      class basic_environment;
+      /**
+       * @brief Map of environment variable names to values.
+       */
+      using environment = basic_environment<char>;
+    }  // namespace v1
+  }  // namespace process
 }  // namespace boost
 #endif
 namespace video {
