@@ -168,6 +168,35 @@
               <input type="text" class="form-control" id="appName" aria-describedby="appNameHelp" v-model="editForm.name" />
               <div id="appNameHelp" class="form-text">{{ $t('apps.app_name_desc') }}</div>
             </div>
+            <!-- command -->
+            <div class="mb-3">
+              <label for="appCmd" class="form-label">{{ $t('apps.cmd') }}</label>
+              <div class="input-group">
+                <input type="text" class="form-control monospace" id="appCmd" aria-describedby="appCmdHelp"
+                  v-model="editForm.cmd" />
+                <button class="btn btn-secondary" type="button"
+                  @click="browseFor('executable', 'file_browser.select_executable', editForm.cmd, v => editForm.cmd = v)">
+                  <folder-open :size="18" class="icon"></folder-open>
+                </button>
+              </div>
+              <div id="appCmdHelp" class="form-text">
+                {{ $t('apps.cmd_desc') }}<br>
+                <b>{{ $t('_common.note') }}</b> {{ $t('apps.cmd_note') }}
+              </div>
+            </div>
+            <!-- working dir -->
+            <div class="mb-3">
+              <label for="appWorkingDir" class="form-label">{{ $t('apps.working_dir') }}</label>
+              <div class="input-group">
+                <input type="text" class="form-control monospace" id="appWorkingDir" aria-describedby="appWorkingDirHelp"
+                  v-model="editForm['working-dir']" />
+                <button class="btn btn-secondary" type="button"
+                  @click="browseFor('directory', 'file_browser.select_directory', editForm['working-dir'], v => editForm['working-dir'] = v)">
+                  <folder-open :size="18" class="icon"></folder-open>
+                </button>
+              </div>
+              <div id="appWorkingDirHelp" class="form-text">{{ $t('apps.working_dir_desc') }}</div>
+            </div>
             <!-- output -->
             <div class="mb-3">
               <label for="appOutput" class="form-label">{{ $t('apps.output_name') }}</label>
@@ -180,6 +209,9 @@
                 </button>
               </div>
               <div id="appOutputHelp" class="form-text">{{ $t('apps.output_desc') }}</div>
+              <div v-if="outputLooksLikeExecutable" class="alert alert-warning py-2 mt-2 mb-0 small" role="alert">
+                {{ $t('apps.output_looks_like_command') }}
+              </div>
             </div>
             <!-- prep and state commands -->
             <template v-for="type in ['prep', 'state']" :key="type">
@@ -284,35 +316,6 @@
                 {{ $t('apps.detached_cmds_desc') }}<br>
                 <b>{{ $t('_common.note') }}</b> {{ $t('apps.detached_cmds_note') }}
               </div>
-            </div>
-            <!-- command -->
-            <div class="mb-3">
-              <label for="appCmd" class="form-label">{{ $t('apps.cmd') }}</label>
-              <div class="input-group">
-                <input type="text" class="form-control monospace" id="appCmd" aria-describedby="appCmdHelp"
-                  v-model="editForm.cmd" />
-                <button class="btn btn-secondary" type="button"
-                  @click="browseFor('executable', 'file_browser.select_executable', editForm.cmd, v => editForm.cmd = v)">
-                  <folder-open :size="18" class="icon"></folder-open>
-                </button>
-              </div>
-              <div id="appCmdHelp" class="form-text">
-                {{ $t('apps.cmd_desc') }}<br>
-                <b>{{ $t('_common.note') }}</b> {{ $t('apps.cmd_note') }}
-              </div>
-            </div>
-            <!-- working dir -->
-            <div class="mb-3">
-              <label for="appWorkingDir" class="form-label">{{ $t('apps.working_dir') }}</label>
-              <div class="input-group">
-                <input type="text" class="form-control monospace" id="appWorkingDir" aria-describedby="appWorkingDirHelp"
-                  v-model="editForm['working-dir']" />
-                <button class="btn btn-secondary" type="button"
-                  @click="browseFor('directory', 'file_browser.select_directory', editForm['working-dir'], v => editForm['working-dir'] = v)">
-                  <folder-open :size="18" class="icon"></folder-open>
-                </button>
-              </div>
-              <div id="appWorkingDirHelp" class="form-text">{{ $t('apps.working_dir_desc') }}</div>
             </div>
             <!-- elevation -->
             <Checkbox v-if="platform === 'windows'"
@@ -839,6 +842,18 @@
       canReorder() {
         return this.apps.length > 1 && this.sortMode === 'default' && !this.searchQuery;
       },
+      /**
+       * Detect an executable path accidentally entered in the log output field.
+       *
+       * The output field is only a log destination. Opening an application binary for
+       * append can corrupt it, so the form refuses to save this configuration.
+       *
+       * @returns {boolean} True when the configured output path looks executable.
+       */
+      outputLooksLikeExecutable() {
+        const output = String(this.editForm?.output ?? "").trim().toLowerCase();
+        return /\.(exe|bat|cmd|com|lnk|ps1|msi|sh|appimage)$/.test(output);
+      },
       displayedApps() {
         let list = this.apps.map((app, index) => ({ app, index }));
 
@@ -1238,6 +1253,13 @@
       },
       save() {
         this.editFormError = "";
+        if (this.outputLooksLikeExecutable) {
+          this.editFormError = this.$t('apps.output_looks_like_command');
+          const modalBody = this.$refs.editModal?.querySelector('.modal-body');
+          if (modalBody) modalBody.scrollTop = 0;
+          return;
+        }
+
         const currentImagePath = this.editForm["image-path"] == null ? "" : String(this.editForm["image-path"]).trim();
         this.editForm["image-path"] = currentImagePath.replaceAll('"', '');
 

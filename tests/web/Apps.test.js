@@ -182,6 +182,41 @@ describe('save – cover image validation', () => {
   })
 })
 
+describe('outputLooksLikeExecutable', () => {
+  it.each([
+    'C:\\Games\\game.exe',
+    'C:\\Tools\\run.BAT',
+    '/opt/app/run.sh',
+    '/apps/Tool.AppImage',
+  ])('detects an executable output path: %s', path => {
+    expect(Apps.computed.outputLooksLikeExecutable.call({ editForm: { output: path } })).toBe(true)
+  })
+
+  it.each([
+    '',
+    '/logs/app.log',
+    'C:\\Logs\\game.exe.log',
+    null,
+    undefined,
+  ])('accepts an ordinary log path: %s', path => {
+    expect(Apps.computed.outputLooksLikeExecutable.call({ editForm: { output: path } })).toBe(false)
+  })
+})
+
+describe('save – log output validation', () => {
+  it('blocks an executable entered in the output field', () => {
+    const ctx = saveContext('/covers/cover.png')
+    ctx.editForm.output = 'C:\\Games\\game.exe'
+    ctx.outputLooksLikeExecutable = true
+
+    Apps.methods.save.call(ctx)
+
+    expect(ctx.editFormError).toBe('apps.output_looks_like_command')
+    expect(ctx._modalBody.scrollTop).toBe(0)
+    expect(apiFetch).not.toHaveBeenCalled()
+  })
+})
+
 /**
  * @brief Create file-browser state with an existing selection for navigation tests.
  *
