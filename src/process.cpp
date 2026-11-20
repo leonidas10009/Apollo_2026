@@ -351,6 +351,16 @@ namespace proc {
         std::string device_uuid_str;
         uuid_util::uuid_t device_uuid;
 
+        // A launch can reach this path without a client UUID (for example during
+        // local tests or a malformed session). Generate a valid identity instead
+        // of throwing while parsing the virtual display UUID.
+        if (_app.uuid.size() != 36) {
+          _app.uuid = uuid_util::uuid_t::generate().string();
+        }
+        if (launch_session->unique_id.size() != 36) {
+          launch_session->unique_id = uuid_util::uuid_t::generate().string();
+        }
+
         if (_app.use_app_identity) {
           device_name = _app.name;
           if (_app.per_client_app_identity) {
