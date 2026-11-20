@@ -5,6 +5,8 @@
 > instructions. Commands, package names, and paths that still use `sunshine`/`Sunshine` are
 > compatibility identifiers; the Windows executable is `apollo.exe`. Apollo-specific behavior
 > is documented below and in the [Apollo Wiki](https://github.com/ClassicOldSong/Apollo/wiki).
+> See [status.md](status.md) for the current release, verification results and known
+> limitations, and [apollo-input.md](apollo-input.md) for the reusable input library.
 
 The recommended method for running Apollo is to use the [binaries](#binaries) included in the
 [latest release][latest-release], unless otherwise specified.
@@ -644,6 +646,13 @@ Apollo supports two virtual gamepad backends on Windows. You can install the
 [Virtual HID Broker](https://github.com/LizardByte/libvirtualhid/releases/latest) separately as an optional paid upgrade.
 Its Windows package includes a broker service and user-mode driver for a Raw Input keyboard and mouse plus full virtual
 gamepad support. ViGEmBus remains available as a limited alternative for Xbox 360 and DualShock 4 gamepads, but it has reached end of life and is not bundled by Apollo.
+
+> [!TIP]
+> ViGEmBus 1.22.0 is signed and works as a free fallback for Xbox 360/DualShock 4.
+> Install it from <https://github.com/nefarius/ViGEmBus/releases> and select the
+> ViGEmBus backend in **Configuration → Input**. The reusable `apollo-input` library
+> exercises this path with an XInput loopback test; see
+> [apollo-input.md](apollo-input.md).
 
 > [!NOTE]
 > The Apollo Windows installer bundles the complete SudoVDA driver package for

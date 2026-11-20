@@ -43,6 +43,20 @@ contains the production assets under `build/assets/web`, so downstream packagers
 Web UI without running Node.js or Vite during the native Apollo build. The package is not
 currently published to NPM; `npm pack` from the repository root produces it locally.
 
+#### Reusable input library
+
+`libs/apollo-input` is a standalone MIT C++ library for virtual gamepads. It is not
+part of the native Apollo build; build it separately:
+
+```bash
+cmake -S libs/apollo-input -B cmake-build-apollo-input -G Ninja \
+  -DAPOLLO_INPUT_VIGEMCLIENT_DIR="$PWD/third-party/ViGEmClient"
+cmake --build cmake-build-apollo-input --parallel
+ctest --test-dir cmake-build-apollo-input --output-on-failure
+```
+
+See [apollo-input.md](apollo-input.md) for the API, backends and roadmap.
+
 #### FreeBSD
 > [!CAUTION]
 > Apollo support for FreeBSD is experimental and may be incomplete or not work as expected

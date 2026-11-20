@@ -3,6 +3,9 @@
 `apollo-input` is a small, standalone C++ library that abstracts virtual gamepad
 backends. It does not depend on Apollo, so it can be reused by other projects.
 
+The full architecture, SDL3 analysis, driver/signing considerations and roadmap are
+documented in [`docs/apollo-input.md`](../../docs/apollo-input.md).
+
 ## Features
 
 - One input model: buttons, sticks, triggers, touchpad, IMU, rumble/LED feedback.

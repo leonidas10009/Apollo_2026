@@ -388,6 +388,12 @@ Its Windows package includes a broker service and user-mode driver for a Raw Inp
 gamepad support. ViGEmBus is a limited alternative for Xbox 360 and DualShock 4 support that has reached end of life. If you use the
 [ViGEmBus fallback](https://github.com/nefarius/ViGEmBus/releases/latest), you must use version 1.17 or newer.
 
+> [!TIP]
+> Apollo 2026 validates ViGEmBus 1.22.0 as a free Windows fallback. The reusable
+> [`apollo-input`](apollo-input.md) library includes an XInput loopback test that
+> creates a virtual Xbox 360 pad and verifies it end to end. See
+> [status.md](status.md) for the current validation state.
+
 > [!NOTE]
 > The Apollo Windows installer bundles SudoVDA for virtual displays, but it does
 > not bundle ViGEmBus or the Virtual HID Broker. Install the backend you want

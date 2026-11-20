@@ -25,6 +25,21 @@ The full Git history, authorship, GPL-3.0 license, and upstream notices are reta
 - [`libs/apollo-input`](libs/apollo-input/README.md) — standalone MIT-licensed C++ input
   abstraction library with ViGEmBus (Windows) and uinput (Linux) backends. It is independent of
   Apollo and can be embedded in other projects with `add_subdirectory` or `find_package`.
+  See [docs/apollo-input.md](docs/apollo-input.md) for architecture, SDL3 analysis and roadmap.
+
+## Current status
+
+**Apollo 2026 1.0.0** is the current release, based on Sunshine `2026.1116.25010`.
+
+- Windows binaries: `apollo.exe`, NSIS installer and portable ZIP.
+- Native tests: **942 tests / 931 pass / 11 skipped / 0 failed**.
+- Web UI: **238 tests pass**; `npm audit` reports 0 vulnerabilities.
+- SudoVDA is bundled and installed by the Windows installer.
+- Virtual HID Broker is optional and requires a paid machine license.
+- ViGEmBus 1.22.0 can be installed separately as a free Xbox 360/DS4 fallback.
+
+See [docs/status.md](docs/status.md) for artifacts, verification, known limitations and the
+remaining runtime tests (pairing, streaming, clean-machine installer and code signing).
 
 ## Usage
 
@@ -32,10 +47,12 @@ Apollo is based on the Sunshine 2026 codebase. The documentation in this reposit
 primary reference:
 
 - [Getting started](docs/getting_started.md)
+- [Status](docs/status.md)
 - [Configuration](docs/configuration.md)
 - [Troubleshooting](docs/troubleshooting.md)
 - [API](docs/api.md)
 - [Building](docs/building.md)
+- [apollo-input](docs/apollo-input.md)
 - [Apollo Wiki](https://github.com/ClassicOldSong/Apollo/wiki)
 
 > [!NOTE]
