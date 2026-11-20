@@ -494,7 +494,7 @@
                 <pre>sh -c "displayplacer "id:&lt;screenId&gt; res:${SUNSHINE_CLIENT_WIDTH}x${SUNSHINE_CLIENT_HEIGHT} hz:${SUNSHINE_CLIENT_FPS} scaling:on origin:(0,0) degree:0""</pre>
               </div>
               <div class="form-text"><a
-                  :href="`${documentationBaseUrl}/md_docs_2app__examples.html`"
+                  :href="documentationBaseUrl"
                   target="_blank">{{ $t('_common.see_more') }}</a></div>
             </div>
           </div>
@@ -831,7 +831,7 @@
     },
     computed: {
       documentationBaseUrl() {
-        return 'https://github.com/leonidas10009/Apollo_2026/tree/main/docs'
+        return 'https://github.com/leonidas10009/Apollo_2026/blob/main/docs/app_examples.md'
       },
       /**
        * Drag-to-reorder is only meaningful when the card order matches the persisted order.

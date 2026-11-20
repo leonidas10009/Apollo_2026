@@ -53,6 +53,13 @@ else()
                 RESULT_VARIABLE GIT_DESCRIBE_ERROR_CODE
                 OUTPUT_STRIP_TRAILING_WHITESPACE
         )
+        if(NOT GITHUB_COMMIT)
+            execute_process(
+                    COMMAND ${GIT_EXECUTABLE} rev-parse HEAD
+                    OUTPUT_VARIABLE GITHUB_COMMIT
+                    OUTPUT_STRIP_TRAILING_WHITESPACE
+            )
+        endif()
         # Check if Dirty
         execute_process(
                 COMMAND ${GIT_EXECUTABLE} diff -b --quiet --exit-code

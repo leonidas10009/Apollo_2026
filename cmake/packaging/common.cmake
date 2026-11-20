@@ -29,6 +29,14 @@ install(DIRECTORY "${SUNSHINE_SOURCE_ASSETS_DIR}/common/assets/"
         DESTINATION "${SUNSHINE_ASSETS_DIR}"
         ${_sunshine_common_asset_component}
         PATTERN "web" EXCLUDE)
+
+# license and attribution files required by GPL-3.0 and the upstream notices
+install(FILES
+        "${PROJECT_SOURCE_DIR}/LICENSE"
+        "${PROJECT_SOURCE_DIR}/NOTICE"
+        "${PROJECT_SOURCE_DIR}/CREDITS.md"
+        DESTINATION "."
+        COMPONENT application)
 # copy assets to build directory, for running without install
 file(GLOB_RECURSE ALL_ASSETS
         RELATIVE "${SUNSHINE_SOURCE_ASSETS_DIR}/common/assets/" "${SUNSHINE_SOURCE_ASSETS_DIR}/common/assets/*")

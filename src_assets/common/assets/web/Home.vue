@@ -290,7 +290,6 @@
     sanitize: false
   });
 
-  console.log("Hello, Apollo!")
   export default {
     components: {
       ResourceCard,
