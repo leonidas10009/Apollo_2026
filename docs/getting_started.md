@@ -649,6 +649,9 @@ gamepad support. ViGEmBus remains available as a limited alternative for Xbox 36
 > The Apollo Windows installer bundles the complete SudoVDA driver package for
 > virtual displays. It does not bundle ViGEmBus or the Virtual HID Broker:
 > ViGEmBus is end-of-life, and the broker is a separate licensed download.
+> The broker and its user-mode driver are distributed under the LizardByte
+> Source-Available License 1.0, which does not permit redistribution, so Apollo
+> links to the official signed package instead of bundling it.
 
 When Virtual HID Broker is used, Apollo requires libvirtualhid version `2026.914.1218.10` or newer.
 
