@@ -52,8 +52,7 @@ if(WIN32 AND APOLLO_INPUT_WITH_VIGEM)
 
         if(APOLLO_INPUT_VIGEMCLIENT_DIR AND EXISTS "${APOLLO_INPUT_VIGEMCLIENT_DIR}/CMakeLists.txt")
             add_subdirectory("${APOLLO_INPUT_VIGEMCLIENT_DIR}"
-                "${CMAKE_CURRENT_BINARY_DIR}/vigemclient"
-                EXCLUDE_FROM_ALL)
+                "${CMAKE_CURRENT_BINARY_DIR}/vigemclient")
             set(_apollo_input_vigem_ready TRUE)
         endif()
     endif()
