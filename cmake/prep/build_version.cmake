@@ -121,6 +121,25 @@ if(PROJECT_VERSION_BASE MATCHES "^([0-9][0-9][0-9][0-9])\\.([0-9][0-9][0-9][0-9]
     if(PROJECT_DAY LESS 10 AND NOT PROJECT_DAY MATCHES "^0")
         set(PROJECT_DAY "0${PROJECT_DAY}")
     endif()
+else()
+    # SemVer releases do not carry the date. Fall back to the Git commit date so
+    # generated metadata still has a meaningful release date.
+    if(NOT GIT_EXECUTABLE)
+        find_package(Git QUIET)
+    endif()
+    if(GIT_EXECUTABLE)
+        execute_process(
+                COMMAND ${GIT_EXECUTABLE} log -1 --format=%cs
+                OUTPUT_VARIABLE PROJECT_DATE
+                RESULT_VARIABLE PROJECT_DATE_ERROR
+                OUTPUT_STRIP_TRAILING_WHITESPACE
+        )
+        if(NOT PROJECT_DATE_ERROR AND PROJECT_DATE MATCHES "^([0-9][0-9][0-9][0-9])-([0-9][0-9])-([0-9][0-9])$")
+            set(PROJECT_YEAR "${CMAKE_MATCH_1}")
+            set(PROJECT_MONTH "${CMAKE_MATCH_2}")
+            set(PROJECT_DAY "${CMAKE_MATCH_3}")
+        endif()
+    endif()
 endif()
 
 # Parse PROJECT_VERSION to extract major, minor, and patch components

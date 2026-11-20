@@ -303,16 +303,16 @@ Linux and macOS binaries are built locally with the commands above until Apollo-
 and signing credentials are configured.
 
 ### Versioning
-Apollo release versions use the calendar scheme `YYYY.MMDD.patch`
-(for example `2026.1120.1`). `project(Apollo VERSION ...)` in `CMakeLists.txt` declares the
-release version. Builds from `main` use that version verbatim; feature branches append the
-short commit hash, and dirty working trees append `-dirty`.
+Apollo uses [Semantic Versioning](https://semver.org/). The first Apollo 2026 release is
+`1.0.0`, based on Sunshine `2026.1116.25010`. `project(Apollo VERSION ...)` in
+`CMakeLists.txt` declares the release version. Builds from `main` use that version verbatim;
+feature branches append the short commit hash, and dirty working trees append `-dirty`.
 
 For CI or reproducible release builds, set both environment variables before configuring:
 
 ```bash
-BUILD_VERSION=2026.1120.1 BRANCH=main cmake -B build -G Ninja -S .
+BUILD_VERSION=1.0.0 BRANCH=main cmake -B build -G Ninja -S .
 ```
 
-Create the matching Git tag (`v2026.1120.1`) when publishing a release so the source archive
-and the binary version stay aligned.
+Create the matching Git tag (`v1.0.0`) when publishing a release so the source archive and
+the binary version stay aligned.

@@ -1,6 +1,6 @@
 [project]
 name = "Apollo"
-version = "2026.1120.1"
+version = "1.0.0"
 description = "Self-hosted game stream host for Artemis/Moonlight."
 repository = "https://github.com/leonidas10009/Apollo_2026"
 logo = "apollo.svg"

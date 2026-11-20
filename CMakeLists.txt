@@ -5,9 +5,9 @@ cmake_minimum_required(VERSION 3.24)
 # `third-party/libvirtualhid` requires 3.24
 # todo - set this conditionally
 
-# Apollo release versions follow the Sunshine calendar scheme (YYYY.MMDD.patch)
-# so the upstream base date remains visible while Apollo keeps its own patch counter.
-project(Apollo VERSION 2026.1120.1
+# Apollo uses SemVer for release versions. The first Apollo 2026 release is 1.0.0;
+# the Sunshine base commit is documented in the README, docs and Git tag.
+project(Apollo VERSION 1.0.0
         DESCRIPTION "Self-hosted game stream host for Artemis"
         HOMEPAGE_URL "https://github.com/leonidas10009/Apollo_2026")
 
