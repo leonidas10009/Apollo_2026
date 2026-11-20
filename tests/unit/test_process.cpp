@@ -254,6 +254,45 @@ TEST(ProcessTest, PrepareCommand) {
 #endif
 }
 
+TEST(ProcessTest, EmptyWorkingDirectoryFallsBackToCommandParent) {
+  const auto test_dir = fs::temp_directory_path() / "sunshine_process_working_dir_test";  // NOSONAR(cpp:S5443): safe for tests
+  fs::create_directories(test_dir);
+  const auto cleanup = util::fail_guard([&test_dir]() {
+    std::error_code ec;
+    fs::remove_all(test_dir, ec);
+  });
+  const auto apps_file = test_dir / "apps.json";
+  {
+    std::ofstream file(apps_file);
+    file << R"({
+      "version": 2,
+      "apps": [
+        {
+          "name": "Empty working dir",
+          "uuid": "11111111-1111-1111-1111-111111111111",
+          "working-dir": ""
+        },
+        {
+          "name": "Configured working dir",
+          "uuid": "22222222-2222-2222-2222-222222222222",
+          "working-dir": "C:\\Games\\App"
+        }
+      ]
+    })";
+  }
+
+  auto parsed = proc::parse(apps_file.string());
+  ASSERT_TRUE(parsed.has_value());
+  const auto &apps = parsed->get_apps();
+  ASSERT_EQ(apps.size(), 2U);
+  EXPECT_TRUE(apps[0].working_dir.empty());
+#ifdef _WIN32
+  EXPECT_EQ(apps[1].working_dir, "C:\\Games\\App\\");
+#else
+  EXPECT_EQ(apps[1].working_dir, "C:\\Games\\App");
+#endif
+}
+
 class ProcessPNGTest: public BaseTest {  // NOSONAR(cpp:S3656): protected members are intentional for test fixture subclassing
 protected:
   void SetUp() override {

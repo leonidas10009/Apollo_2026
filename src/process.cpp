@@ -1536,7 +1536,12 @@ namespace proc {
     #ifdef _WIN32
             // The working directory, unlike the command itself, should not be quoted.
             boost::erase_all(ctx.working_dir, "\"");
-            ctx.working_dir += '\\';
+            // Only append the separator when a directory was actually configured. Appending it to an empty
+            // value turns the working directory into the drive root instead of falling back to the command's
+            // parent directory.
+            if (!ctx.working_dir.empty()) {
+              ctx.working_dir += '\\';
+            }
     #endif
           }
           if (app_node.contains("image-path"))
