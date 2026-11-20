@@ -25,7 +25,7 @@
         </ul>
         <RouterLink class="btn btn-danger" to="/troubleshooting#logs">
           <file-text :size="18" class="icon"></file-text>
-          View Logs
+          {{ $t('index.view_logs') }}
         </RouterLink>
       </div>
     </div>

@@ -2164,7 +2164,12 @@ TEST_F(ConfigHttpTest, SaveAppNormalizesOptionalImagePath) {
       if (!expected_path.empty()) {
         expected["image-path"] = expected_path;
       }
-      EXPECT_EQ(saved.at("apps"), json::array({expected}));
+      // Parsing the app list assigns persistent UUIDs; they are not part of this normalization test.
+      auto saved_apps = saved.at("apps");
+      for (auto &app : saved_apps) {
+        app.erase("uuid");
+      }
+      EXPECT_EQ(saved_apps, json::array({expected}));
       EXPECT_EQ(saved.at("env"), initial.at("env"));
     }
   }
@@ -2200,7 +2205,9 @@ TEST_F(ConfigHttpTest, SaveAppOmitsNullOptionalFieldsAndPreservesConfiguredValue
     std::ifstream file(config::stream.file_apps);
     const auto saved = json::parse(file);
     ASSERT_EQ(saved.at("apps").size(), 1U);
-    EXPECT_EQ(saved.at("apps").at(0), (json {{"name", "Null optional"}}));
+    auto saved_app = saved.at("apps").at(0);
+    saved_app.erase("uuid");
+    EXPECT_EQ(saved_app, (json {{"name", "Null optional"}}));
   }
 
   json configured {
@@ -2226,7 +2233,9 @@ TEST_F(ConfigHttpTest, SaveAppOmitsNullOptionalFieldsAndPreservesConfiguredValue
     ASSERT_EQ(saved.at("apps").size(), 2U);
     json expected = configured;
     expected.erase("index");
-    EXPECT_EQ(saved.at("apps").at(0), expected);
+    auto saved_app = saved.at("apps").at(0);
+    saved_app.erase("uuid");
+    EXPECT_EQ(saved_app, expected);
   }
 
   json nested_null_prep {

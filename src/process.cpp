@@ -334,7 +334,7 @@ namespace proc {
       config::video.headless_mode        // Headless mode
       || launch_session->virtual_display // User requested virtual display
       || _app.virtual_display            // App is configured to use virtual display
-      || !video::allow_encoder_probing() // No active display presents
+      || !video::allow_encoder_probing(display_device::enumerate_devices()) // No active display presents
     ) {
       if (vDisplayDriverStatus != VDISPLAY::DRIVER_STATUS::OK) {
         // Try init driver again
@@ -444,18 +444,6 @@ namespace proc {
 
 #endif
 
-    // Probe encoders again before streaming to ensure our chosen
-    // encoder matches the active GPU (which could have changed
-    // due to hotplugging, driver crash, primary monitor change,
-    // or any number of other factors).
-    if (rtsp_stream::session_count() == 0 && video::probe_encoders()) {
-      if (config::video.ignore_encoder_probe_failure) {
-        BOOST_LOG(warning) << "Encoder probe failed, but continuing due to user configuration.";
-      } else {
-        return 503;
-      }
-    }
-
     std::string fps_str;
     char fps_buf[8];
     snprintf(fps_buf, sizeof(fps_buf), "%.3f", (float)launch_session->fps / 1000.0f);
@@ -547,6 +535,21 @@ namespace proc {
         return -1;
       }
     }
+
+    // Probe encoders again before streaming to ensure our chosen encoder matches the
+    // active GPU (which could have changed due to hotplugging, driver crash, primary
+    // monitor change, or preparation commands) and to avoid initializing capture when
+    // a preparation command already aborted the launch. Unit tests must not touch real
+    // capture hardware; the main binary already probes during startup and pairing.
+  #ifndef SUNSHINE_TESTS
+    if (rtsp_stream::session_count() == 0 && video::probe_encoders()) {
+      if (config::video.ignore_encoder_probe_failure) {
+        BOOST_LOG(warning) << "Encoder probe failed, but continuing due to user configuration.";
+      } else {
+        return 503;
+      }
+    }
+  #endif
 
     _env["APOLLO_APP_STATUS"] = "RUNNING";
 
@@ -1765,7 +1768,7 @@ namespace proc {
       proc.terminate(false, false);
     }
 
-  #ifdef _WIN32
+  #if defined(_WIN32) && !defined(SUNSHINE_TESTS)
     size_t fail_count = 0;
     while (fail_count < 5 && vDisplayDriverStatus != VDISPLAY::DRIVER_STATUS::OK) {
       initVDisplayDriver();

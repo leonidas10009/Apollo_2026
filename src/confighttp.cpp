@@ -623,7 +623,7 @@ namespace confighttp {
 
     const SimpleWeb::CaseInsensitiveMultimap headers {
       {"Content-Type", "application/json"},
-      {"WWW-Authenticate", R"(Basic realm="Sunshine Gamestream Host", charset="UTF-8")"},
+      {"WWW-Authenticate", R"(Basic realm="Apollo Gamestream Host", charset="UTF-8")"},
       {"X-Frame-Options", "DENY"},
       {"Content-Security-Policy", "frame-ancestors 'none';"}
     };
@@ -3700,18 +3700,23 @@ namespace confighttp {
   }
 
   /**
-   * @brief Quit Apollo from the legacy Apollo Web UI.
+   * @brief Quit Apollo from the Web UI.
    * @param response The HTTP response object.
    * @param request The HTTP request object.
    */
   void quit(const resp_https_t &response, const req_https_t &request) {
-    if (!authenticate_legacy(response, request)) {
+    if (!authenticate(response, request)) {
+      return;
+    }
+
+    const std::string client_id = get_client_id(request);
+    if (!validate_csrf_token(response, request, client_id)) {
       return;
     }
 
     print_req(request);
 
-    BOOST_LOG(warning) << "Requested quit from config page!"sv;
+    BOOST_LOG(warning) << "Requested quit from the Web UI!"sv;
 
     proc::proc.terminate();
 

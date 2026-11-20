@@ -28,10 +28,10 @@
         </option>
       </datalist>
       <span v-if="searchQuery && searchResults.length === 0" class="text-muted small flex-shrink-0">
-        No results found for "{{ searchQuery }}"
+        {{ $t('config.search_no_results', { query: searchQuery }) }}
       </span>
       <span v-else-if="searchQuery" class="text-muted small flex-shrink-0">
-        Found {{ searchResults.length }} result(s)
+        {{ $t('config.search_results', { count: searchResults.length }) }}
       </span>
     </div>
 

@@ -33,6 +33,11 @@ extern "C" {
 
 namespace {
   /**
+   * @brief Permissions granted to fake clients in input tests.
+   */
+  constexpr auto TEST_INPUT_PERMISSIONS = crypto::PERM::_all;
+
+  /**
    * @brief Protocol metadata for a fixed-size input packet.
    */
   struct input_packet_spec_t {
@@ -84,7 +89,7 @@ namespace {
       packet.header.magic = util::endian::little(magic);
       std::vector<std::uint8_t> bytes(sizeof(packet));
       std::memcpy(bytes.data(), &packet, sizeof(packet));
-      input::passthrough(stream_input, std::move(bytes));
+      input::passthrough(stream_input, std::move(bytes), TEST_INPUT_PERMISSIONS);
     }
     input::testing::process_queued_messages(stream_input);
     input::testing::set_input_packet_hook({});
@@ -255,7 +260,7 @@ TEST_F(InputGamepadSessionTest, RejectsMalformedBatchablePacketsAtQueueIngress) 
   ASSERT_NE(stream_input, nullptr);
 
   auto short_header = make_input_packet(SS_PEN_MAGIC, sizeof(std::uint32_t), sizeof(NV_INPUT_HEADER) - 1);
-  input::passthrough(stream_input, std::move(short_header));
+  input::passthrough(stream_input, std::move(short_header), TEST_INPUT_PERMISSIONS);
   EXPECT_EQ(input::testing::queued_input_packet_count(stream_input), 0);
 
   constexpr std::array batchable_packet_specs {
@@ -275,16 +280,16 @@ TEST_F(InputGamepadSessionTest, RejectsMalformedBatchablePacketsAtQueueIngress) 
     const auto declared_size = static_cast<std::uint32_t>(size - sizeof(std::uint32_t));
 
     auto truncated_packet = make_input_packet(magic, declared_size, size - 1);
-    input::passthrough(stream_input, std::move(truncated_packet));
+    input::passthrough(stream_input, std::move(truncated_packet), TEST_INPUT_PERMISSIONS);
     EXPECT_EQ(input::testing::queued_input_packet_count(stream_input), valid_packet_count) << "magic=" << magic;
 
     auto valid_packet = make_input_packet(magic, declared_size, size);
-    input::passthrough(stream_input, std::move(valid_packet));
+    input::passthrough(stream_input, std::move(valid_packet), TEST_INPUT_PERMISSIONS);
     ++valid_packet_count;
     EXPECT_EQ(input::testing::queued_input_packet_count(stream_input), valid_packet_count) << "magic=" << magic;
 
     auto oversized_declared_size = make_input_packet(magic, declared_size + 1, size + 1);
-    input::passthrough(stream_input, std::move(oversized_declared_size));
+    input::passthrough(stream_input, std::move(oversized_declared_size), TEST_INPUT_PERMISSIONS);
     EXPECT_EQ(input::testing::queued_input_packet_count(stream_input), valid_packet_count) << "magic=" << magic;
   }
 }
@@ -314,7 +319,7 @@ TEST_F(InputGamepadSessionTest, SerializesArrivalAndStatePacketsForOneController
 
   std::vector<std::uint8_t> arrival_bytes(sizeof(arrival));
   std::memcpy(arrival_bytes.data(), &arrival, sizeof(arrival));
-  input::passthrough(stream_input, std::move(arrival_bytes));
+  input::passthrough(stream_input, std::move(arrival_bytes), TEST_INPUT_PERMISSIONS);
   ASSERT_EQ(scheduled.size(), 1);
   EXPECT_EQ(scheduled.front(), stream_input);
 
@@ -338,7 +343,7 @@ TEST_F(InputGamepadSessionTest, SerializesArrivalAndStatePacketsForOneController
 
   std::vector<std::uint8_t> state_bytes(sizeof(state));
   std::memcpy(state_bytes.data(), &state, sizeof(state));
-  input::passthrough(stream_input, std::move(state_bytes));
+  input::passthrough(stream_input, std::move(state_bytes), TEST_INPUT_PERMISSIONS);
   EXPECT_EQ(scheduled.size(), 1);
   EXPECT_EQ(input::testing::queued_input_packet_count(stream_input), 1);
 
@@ -348,7 +353,7 @@ TEST_F(InputGamepadSessionTest, SerializesArrivalAndStatePacketsForOneController
     worker.join();
     FAIL() << "Could not create independent input stream";
   }
-  input::passthrough(other_input, make_input_packet(0x12345678, sizeof(std::uint32_t), sizeof(NV_INPUT_HEADER)));
+  input::passthrough(other_input, make_input_packet(0x12345678, sizeof(std::uint32_t), sizeof(NV_INPUT_HEADER)), TEST_INPUT_PERMISSIONS);
   EXPECT_EQ(scheduled.size(), 2);
   if (scheduled.size() == 2) {
     EXPECT_EQ(scheduled.back(), other_input);
@@ -383,7 +388,7 @@ TEST_F(InputGamepadSessionTest, YieldsAfterBoundedPacketBatch) {
   constexpr std::uint32_t unknown_magic = 0x12345678;
   constexpr std::size_t packet_count = 33;
   for (std::size_t n = 0; n < packet_count; ++n) {
-    input::passthrough(stream_input, make_input_packet(unknown_magic, sizeof(std::uint32_t), sizeof(NV_INPUT_HEADER)));
+    input::passthrough(stream_input, make_input_packet(unknown_magic, sizeof(std::uint32_t), sizeof(NV_INPUT_HEADER)), TEST_INPUT_PERMISSIONS);
   }
   ASSERT_EQ(scheduled.size(), 1);
 
@@ -542,7 +547,7 @@ TEST_F(InputGamepadSessionTest, ReplaysMotionAndRumbleAfterResumedControllerArri
     arrival.capabilities = util::endian::little(capabilities);
     std::vector<std::uint8_t> bytes(sizeof(arrival));
     std::memcpy(bytes.data(), &arrival, sizeof(arrival));
-    input::passthrough(resumed, std::move(bytes));
+    input::passthrough(resumed, std::move(bytes), TEST_INPUT_PERMISSIONS);
     input::testing::process_queued_messages(resumed);
 
     for (const auto motion_type : {LI_MOTION_TYPE_ACCEL, LI_MOTION_TYPE_GYRO}) {
@@ -741,7 +746,7 @@ TEST_F(InputGamepadSessionTest, RetargetsNativeTouchAndPenWithoutApplyingTheMoni
     packet.header.magic = util::endian::little(magic);
     std::vector<std::uint8_t> bytes(sizeof(packet));
     std::memcpy(bytes.data(), &packet, sizeof(packet));
-    input::passthrough(stream_input, std::move(bytes));
+    input::passthrough(stream_input, std::move(bytes), TEST_INPUT_PERMISSIONS);
     static_cast<void>(input::testing::process_queued_messages(stream_input));
   };
   SS_TOUCH_PACKET touch {};

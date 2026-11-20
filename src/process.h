@@ -275,8 +275,9 @@ namespace proc {
    *
    * @param file_name File name.
    * @param needs_terminate Whether to terminate running applications before refreshing.
+   * Defaults to false so editing the app list does not interrupt an active stream.
    */
-  void refresh(const std::string &file_name, bool needs_terminate = true);
+  void refresh(const std::string &file_name, bool needs_terminate = false);
   void migrate_apps(nlohmann::json *fileTree_p, nlohmann::json *inputTree_p);
   std::optional<proc::proc_t> parse(const std::string &file_name);
 

@@ -539,9 +539,9 @@ protected:
    */
   void writeAppsJson(const fs::path &path, const std::vector<std::string> &app_names) const {
     std::ofstream file(path);
-    file << "{\n  \"env\": {},\n  \"apps\": [\n";
+    file << "{\n  \"version\": 2,\n  \"env\": {},\n  \"apps\": [\n";
     for (size_t i = 0; i < app_names.size(); ++i) {
-      file << R"(    { "name": ")" << app_names[i] << R"(" })";
+      file << R"(    { "name": ")" << app_names[i] << R"(", "uuid": ")" << std::format("00000000-0000-0000-0000-{:012d}", i) << R"(" })";
       if (i + 1 < app_names.size()) {
         file << ",";
       }

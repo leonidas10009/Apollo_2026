@@ -6,6 +6,12 @@
 // test includes
 #include "../tests_common.h"
 
+// platform includes
+#ifdef _WIN32
+  // src/rtsp.h includes windows.h, while Boost.Asio (src/stream.h) requires winsock2.h first.
+  #include <winsock2.h>
+#endif
+
 // local includes
 #include <src/audio.h>
 #include <src/rtsp.h>

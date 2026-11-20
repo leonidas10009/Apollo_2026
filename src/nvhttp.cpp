@@ -307,6 +307,11 @@ namespace nvhttp {
   }
 
   void save_state() {
+    if (http::unique_id.empty()) {
+      http::uuid = uuid_util::uuid_t::generate();
+      http::unique_id = http::uuid.string();
+    }
+
     nlohmann::json root = nlohmann::json::object();
     // If the state file exists, try to read it.
     if (fs::exists(config::nvhttp.file_state)) {
@@ -486,8 +491,14 @@ namespace nvhttp {
     }
 
     std::string uid = tree["root"]["uniqueid"];
-    http::uuid = uuid_util::uuid_t::parse(uid);
-    http::unique_id = uid;
+    try {
+      http::uuid = uuid_util::uuid_t::parse(uid);
+      http::unique_id = uid;
+    } catch (const std::exception &e) {
+      BOOST_LOG(warning) << "Invalid host UUID in "sv << config::nvhttp.file_state << ": "sv << e.what();
+      http::uuid = uuid_util::uuid_t::generate();
+      http::unique_id = http::uuid.string();
+    }
 
     nlohmann::json root = tree["root"];
     client_t client;  // Local client to load into
@@ -1075,8 +1086,9 @@ namespace nvhttp {
       named_cert_p->allow_client_commands = true;
       named_cert_p->always_use_virtual_display = false;
 
-      auto it = map_id_sess.find(client.uniqueID);
-      map_id_sess.erase(it);
+      // The pairing session is removed by the HTTP handler or pin() completion path
+      // after this function returns. Do not erase it here: sess may reference the map
+      // element and would become invalid before complete_pairing() uses it.
 
       // The client is now successfully paired and will be authorized to connect
       paired = !add_authorized_client(std::move(named_cert_p)).empty();

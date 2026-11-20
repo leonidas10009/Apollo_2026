@@ -589,7 +589,7 @@ namespace system_tray {
     const auto displayed_version = version.empty() ? "unknown" : std::format("v{}", version);
     auto &notification_text = virtualhid_driver_notification_text_storage();
     notification_text = std::format(
-      "Installed Virtual HID Broker {} is not supported by this version of Sunshine. Supported versions: {}. Restart Sunshine after updating. Click for instructions.",
+      "Installed Virtual HID Broker {} is not supported by this version of Apollo. Supported versions: {}. Restart Apollo after updating. Click for instructions.",
       displayed_version,
       supported_versions
     );

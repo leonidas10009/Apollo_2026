@@ -338,7 +338,7 @@ namespace platf {
   std::unique_ptr<deinit_t> init() {
     if (!screen_recording_granted()) {
       BOOST_LOG(error) << "No screen capture permission!"sv;
-      BOOST_LOG(error) << "Please activate Sunshine in System Settings -> Privacy & Security -> Screen & System Audio Recording"sv;
+      BOOST_LOG(error) << "Please activate Apollo in System Settings -> Privacy & Security -> Screen & System Audio Recording"sv;
       return nullptr;
     }
     // Record that we determined that we have the screen capture permission.

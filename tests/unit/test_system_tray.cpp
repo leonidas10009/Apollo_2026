@@ -44,6 +44,17 @@
 namespace {
   using namespace std::chrono_literals;
 
+  #if defined(_WIN32) || defined(__APPLE__)
+  /**
+   * @brief Index of the Virtual HID Broker entry in the top-level tray menu.
+   */
+    #ifdef _WIN32
+  constexpr std::size_t VIRTUALHID_MENU_INDEX = 4;
+    #else
+  constexpr std::size_t VIRTUALHID_MENU_INDEX = 3;
+    #endif
+  #endif
+
   #ifndef _WIN32
   /**
    * @brief Process pending Qt tray events without blocking.
@@ -118,73 +129,64 @@ namespace {
   #endif
 
   /**
-   * @brief Verify the persistent menu exposed by Sunshine.
+   * @brief Verify the persistent Apollo tray menu.
    */
   void verify_menu() {
     const auto &tray_data = system_tray::tray_data_for_testing();
     ASSERT_NE(tray_data.menu, nullptr);
 
-    EXPECT_STREQ(tray_data.menu[0].text, "Open Sunshine");
+    EXPECT_STREQ(tray_data.menu[0].text, "Open Apollo");
     EXPECT_NE(tray_data.menu[0].cb, nullptr);
     EXPECT_STREQ(tray_data.menu[1].text, "-");
     EXPECT_EQ(tray_data.menu[1].cb, nullptr);
+    EXPECT_STREQ(tray_data.menu[2].text, "Reload Apps");
+    EXPECT_NE(tray_data.menu[2].cb, nullptr);
+
+  #ifdef _WIN32
+    EXPECT_STREQ(tray_data.menu[3].text, "Reset Display Device Config");
+    EXPECT_NE(tray_data.menu[3].cb, nullptr);
+  #endif
 
   #if defined(_WIN32) || defined(__APPLE__)
-    EXPECT_STREQ(tray_data.menu[2].text, "Virtual HID Broker");
-    ASSERT_NE(tray_data.menu[2].submenu, nullptr);
-    EXPECT_STREQ(tray_data.menu[2].submenu[0].text, "Status: Checking");
-    EXPECT_EQ(tray_data.menu[2].submenu[0].disabled, 1);
-    EXPECT_STREQ(tray_data.menu[2].submenu[1].text, "-");
-    EXPECT_STREQ(tray_data.menu[2].submenu[2].text, "Get/Manage License");
-    EXPECT_NE(tray_data.menu[2].submenu[2].cb, nullptr);
+    EXPECT_STREQ(tray_data.menu[VIRTUALHID_MENU_INDEX].text, "Virtual HID Broker");
+    ASSERT_NE(tray_data.menu[VIRTUALHID_MENU_INDEX].submenu, nullptr);
+    EXPECT_STREQ(tray_data.menu[VIRTUALHID_MENU_INDEX].submenu[0].text, "Status: Checking");
+    EXPECT_EQ(tray_data.menu[VIRTUALHID_MENU_INDEX].submenu[0].disabled, 1);
+    EXPECT_STREQ(tray_data.menu[VIRTUALHID_MENU_INDEX].submenu[1].text, "-");
+    EXPECT_STREQ(tray_data.menu[VIRTUALHID_MENU_INDEX].submenu[2].text, "Get/Manage License");
+    EXPECT_NE(tray_data.menu[VIRTUALHID_MENU_INDEX].submenu[2].cb, nullptr);
     #ifdef _WIN32
-    EXPECT_STREQ(tray_data.menu[2].submenu[3].text, "Virtual HID Broker Benefits");
-    EXPECT_EQ(tray_data.menu[2].submenu[3].cb, nullptr);
-    verify_virtualhid_benefits_menu(tray_data.menu[2].submenu[3].submenu);
-    EXPECT_STREQ(tray_data.menu[2].submenu[4].text, "Download Virtual HID Broker");
-    EXPECT_NE(tray_data.menu[2].submenu[4].cb, nullptr);
-    EXPECT_EQ(tray_data.menu[2].submenu[5].text, nullptr);
+    EXPECT_STREQ(tray_data.menu[VIRTUALHID_MENU_INDEX].submenu[3].text, "Virtual HID Broker Benefits");
+    EXPECT_EQ(tray_data.menu[VIRTUALHID_MENU_INDEX].submenu[3].cb, nullptr);
+    verify_virtualhid_benefits_menu(tray_data.menu[VIRTUALHID_MENU_INDEX].submenu[3].submenu);
+    EXPECT_STREQ(tray_data.menu[VIRTUALHID_MENU_INDEX].submenu[4].text, "Download Virtual HID Broker");
+    EXPECT_NE(tray_data.menu[VIRTUALHID_MENU_INDEX].submenu[4].cb, nullptr);
+    EXPECT_EQ(tray_data.menu[VIRTUALHID_MENU_INDEX].submenu[5].text, nullptr);
     #else
-    EXPECT_STREQ(tray_data.menu[2].submenu[3].text, "Download Virtual HID Broker");
-    EXPECT_NE(tray_data.menu[2].submenu[3].cb, nullptr);
-    EXPECT_EQ(tray_data.menu[2].submenu[4].text, nullptr);
+    EXPECT_STREQ(tray_data.menu[VIRTUALHID_MENU_INDEX].submenu[3].text, "Download Virtual HID Broker");
+    EXPECT_NE(tray_data.menu[VIRTUALHID_MENU_INDEX].submenu[3].cb, nullptr);
+    EXPECT_EQ(tray_data.menu[VIRTUALHID_MENU_INDEX].submenu[4].text, nullptr);
     #endif
-    EXPECT_STREQ(tray_data.menu[3].text, "-");
-    EXPECT_STREQ(tray_data.menu[4].text, "Donate");
-    ASSERT_NE(tray_data.menu[4].submenu, nullptr);
-    EXPECT_STREQ(tray_data.menu[4].submenu[0].text, "GitHub Sponsors");
-    EXPECT_STREQ(tray_data.menu[4].submenu[1].text, "Patreon");
-    EXPECT_STREQ(tray_data.menu[4].submenu[2].text, "PayPal");
-    EXPECT_EQ(tray_data.menu[4].submenu[3].text, nullptr);
-    EXPECT_STREQ(tray_data.menu[5].text, "-");
-    #ifdef _WIN32
-    EXPECT_STREQ(tray_data.menu[6].text, "Reset Display Device Config");
+  #endif
+
+  #ifdef _WIN32
+    EXPECT_STREQ(tray_data.menu[5].text, "Restart");
+    EXPECT_NE(tray_data.menu[5].cb, nullptr);
+    EXPECT_STREQ(tray_data.menu[6].text, "Quit");
     EXPECT_NE(tray_data.menu[6].cb, nullptr);
-    EXPECT_STREQ(tray_data.menu[7].text, "Restart");
-    EXPECT_NE(tray_data.menu[7].cb, nullptr);
-    EXPECT_STREQ(tray_data.menu[8].text, "Quit");
-    EXPECT_NE(tray_data.menu[8].cb, nullptr);
-    EXPECT_EQ(tray_data.menu[9].text, nullptr);
-    #else
-    EXPECT_STREQ(tray_data.menu[6].text, "Restart");
-    EXPECT_NE(tray_data.menu[6].cb, nullptr);
-    EXPECT_STREQ(tray_data.menu[7].text, "Quit");
-    EXPECT_NE(tray_data.menu[7].cb, nullptr);
-    EXPECT_EQ(tray_data.menu[8].text, nullptr);
-    #endif
-  #else
-    EXPECT_STREQ(tray_data.menu[2].text, "Donate");
-    ASSERT_NE(tray_data.menu[2].submenu, nullptr);
-    EXPECT_STREQ(tray_data.menu[2].submenu[0].text, "GitHub Sponsors");
-    EXPECT_STREQ(tray_data.menu[2].submenu[1].text, "Patreon");
-    EXPECT_STREQ(tray_data.menu[2].submenu[2].text, "PayPal");
-    EXPECT_EQ(tray_data.menu[2].submenu[3].text, nullptr);
-    EXPECT_STREQ(tray_data.menu[3].text, "-");
+    EXPECT_EQ(tray_data.menu[7].text, nullptr);
+  #elif defined(__APPLE__)
     EXPECT_STREQ(tray_data.menu[4].text, "Restart");
     EXPECT_NE(tray_data.menu[4].cb, nullptr);
     EXPECT_STREQ(tray_data.menu[5].text, "Quit");
     EXPECT_NE(tray_data.menu[5].cb, nullptr);
     EXPECT_EQ(tray_data.menu[6].text, nullptr);
+  #else
+    EXPECT_STREQ(tray_data.menu[3].text, "Restart");
+    EXPECT_NE(tray_data.menu[3].cb, nullptr);
+    EXPECT_STREQ(tray_data.menu[4].text, "Quit");
+    EXPECT_NE(tray_data.menu[4].cb, nullptr);
+    EXPECT_EQ(tray_data.menu[5].text, nullptr);
   #endif
   }
 
@@ -348,7 +350,7 @@ TEST_F(SystemTrayTest, LeftClickUsesNativeMacOSMenu) {
 
   tray_data.cb(nullptr);
 
-  EXPECT_STREQ(tray_data.menu[0].text, "Open Sunshine");
+  EXPECT_STREQ(tray_data.menu[0].text, "Open Apollo");
   EXPECT_FALSE(system_tray::tray_initialized_for_testing());
 }
   #endif
@@ -374,9 +376,9 @@ TEST_F(SystemTrayTest, PreparesVirtualHidMenuFromCurrentLicenseStatus) {
   system_tray::prepare_tray_virtualhid_license();
 
   const auto &tray_data = system_tray::tray_data_for_testing();
-  ASSERT_NE(tray_data.menu[2].submenu, nullptr);
-  ASSERT_NE(tray_data.menu[2].submenu[0].text, nullptr);
-  EXPECT_STRNE(tray_data.menu[2].submenu[0].text, "Status: Checking");
+  ASSERT_NE(tray_data.menu[VIRTUALHID_MENU_INDEX].submenu, nullptr);
+  ASSERT_NE(tray_data.menu[VIRTUALHID_MENU_INDEX].submenu[0].text, nullptr);
+  EXPECT_STRNE(tray_data.menu[VIRTUALHID_MENU_INDEX].submenu[0].text, "Status: Checking");
 }
 
 TEST_F(SystemTrayTest, PreparesLicensedVirtualHidMenuBeforeInitialization) {
@@ -391,7 +393,7 @@ TEST_F(SystemTrayTest, PreparesLicensedVirtualHidMenuBeforeInitialization) {
   system_tray::update_tray_virtualhid_license(license, true);
 
   const auto &tray_data = system_tray::tray_data_for_testing();
-  const auto *license_menu = tray_data.menu[2].submenu;
+  const auto *license_menu = tray_data.menu[VIRTUALHID_MENU_INDEX].submenu;
   ASSERT_NE(license_menu, nullptr);
   EXPECT_STREQ(license_menu[0].text, "Status: Licensed");
   EXPECT_STREQ(license_menu[1].text, "Plan: Yearly");
@@ -440,7 +442,7 @@ TEST_F(SystemTrayTest, NotifiesWhenVirtualHidDriverIsUnsupported) {
 
   const auto &tray_data = system_tray::tray_data_for_testing();
   const auto expected_notification = std::format(
-    "Installed Virtual HID Broker v2026.829.2338.54 is not supported by this version of Sunshine. Supported versions: {}. Restart Sunshine after updating. Click for instructions.",
+    "Installed Virtual HID Broker v2026.829.2338.54 is not supported by this version of Apollo. Supported versions: {}. Restart Apollo after updating. Click for instructions.",
     supported_versions
   );
   EXPECT_STREQ(tray_data.notification_title, "Update Virtual HID Broker");
@@ -507,7 +509,7 @@ TEST_F(SystemTrayTest, NoneSelectionSuppressesWindowsVirtualHidNotifications) {
   EXPECT_EQ(tray_data.notification_title, nullptr);
   EXPECT_EQ(tray_data.notification_text, nullptr);
   EXPECT_EQ(tray_data.notification_cb, nullptr);
-  EXPECT_STREQ(tray_data.menu[2].submenu[0].text, "Status: Unavailable");
+  EXPECT_STREQ(tray_data.menu[VIRTUALHID_MENU_INDEX].submenu[0].text, "Status: Unavailable");
 
   const auto supported_versions = std::format(">= {}", LIBVIRTUALHID_MINIMUM_VERSION);
   system_tray::update_tray_virtualhid_driver(true, "2026.829.2338.54", false, supported_versions);  // NOSONAR(cpp:S1313): not IP addresses
@@ -530,7 +532,7 @@ TEST_P(UnlicensedVirtualHidTrayTest, PreparesMenuAndStartupNotification) {
   system_tray::update_tray_virtualhid_license(license, true);
 
   const auto &tray_data = system_tray::tray_data_for_testing();
-  const auto *license_menu = tray_data.menu[2].submenu;
+  const auto *license_menu = tray_data.menu[VIRTUALHID_MENU_INDEX].submenu;
   ASSERT_NE(license_menu, nullptr);
   EXPECT_STREQ(license_menu[0].text, std::format("Status: {}", state_label).c_str());
   EXPECT_STREQ(license_menu[1].text, state_detail);
@@ -574,7 +576,7 @@ TEST_F(SystemTrayTest, NotifiesWhenMacBrokerVersionIsUnsupported) {
 
   const auto &tray_data = system_tray::tray_data_for_testing();
   const auto expected_notification = std::format(
-    "Installed Virtual HID Broker v2026.829.2338 is not supported by this version of Sunshine. Supported versions: {}. Restart Sunshine after updating. Click for instructions.",
+    "Installed Virtual HID Broker v2026.829.2338 is not supported by this version of Apollo. Supported versions: {}. Restart Apollo after updating. Click for instructions.",
     supported_versions
   );
   EXPECT_STREQ(tray_data.notification_title, "Update Virtual HID Broker");
@@ -610,7 +612,7 @@ TEST_F(SystemTrayTest, ShowsLicensedMacBrokerDetailsBeforeInitialization) {
 
   const auto &tray_data = system_tray::tray_data_for_testing();
   ASSERT_EQ(tray_data.iconPathCount, 5);
-  const auto *menu = tray_data.menu[2].submenu;
+  const auto *menu = tray_data.menu[VIRTUALHID_MENU_INDEX].submenu;
   ASSERT_NE(menu, nullptr);
   EXPECT_STREQ(menu[0].text, "Status: Licensed");
   EXPECT_STREQ(menu[1].text, "Plan: Yearly");
@@ -633,7 +635,7 @@ TEST_F(SystemTrayTest, ShowsMacBrokerLicenseAndAvailabilityWithOptionalStartupNo
   system_tray::update_tray_virtualhid_license(license, true);
 
   const auto &tray_data = system_tray::tray_data_for_testing();
-  const auto *menu = tray_data.menu[2].submenu;
+  const auto *menu = tray_data.menu[VIRTUALHID_MENU_INDEX].submenu;
   ASSERT_NE(menu, nullptr);
   EXPECT_STREQ(menu[0].text, "Status: Not Activated");
   EXPECT_STREQ(menu[1].text, "No license is active on this machine");
@@ -806,6 +808,10 @@ protected:
 };
 
 TEST_F(SystemTrayVisualTest, CapturesIconTooltipNotificationsAndMenu) {
+  if (!lizardbyte::common::is_github_actions()) {
+    GTEST_SKIP() << "Visual tray capture tests run only in GitHub Actions";
+  }
+
   std::string unavailable_reason;
   if (!screenshot::is_available(&unavailable_reason)) {
     GTEST_SKIP() << "Screenshot tooling is unavailable: " << unavailable_reason;
