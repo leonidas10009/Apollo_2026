@@ -2,10 +2,12 @@
 Apollo binaries are built using [CMake](https://cmake.org) and require `cmake` >= 3.24.
 
 > [!NOTE]
-> The CMake project is named `Apollo`, but the executable target and binary remain `sunshine`
-> for compatibility with the upstream codebase and existing integrations. Commands below that
-> use `sunshine` refer to that target/binary. On Windows, MSYS2 UCRT64 is the recommended
-> environment (`C:\msys64\msys2_shell.cmd -defterm -here -no-start -ucrt64`).
+> The CMake project is named `Apollo`. On Windows the executable is `apollo.exe` (the internal
+> CMake target keeps the upstream `sunshine` name); on macOS and Linux the target and binary
+> keep the upstream `sunshine` name. Some inherited commands, environment variables, packages
+> and paths still use `sunshine`/`Sunshine` where those are compatibility identifiers. On
+> Windows, MSYS2 UCRT64 is the recommended environment
+> (`C:\msys64\msys2_shell.cmd -defterm -here -no-start -ucrt64`).
 
 ## Building Locally
 
@@ -36,9 +38,10 @@ AppImages use the same system libraries at runtime; they do not bundle libva.
 
 #### Prebuilt Web UI
 
-Apollo publishes the platform-independent Web UI as the `@classicoldsong/apollo` package. The package contains the
-production assets under `build/assets/web`, so downstream packagers can install the Web UI without running Node.js or
-Vite during the native Apollo build.
+The platform-independent Web UI is packaged as `apollo-2026-web-ui`. The package
+contains the production assets under `build/assets/web`, so downstream packagers can install the
+Web UI without running Node.js or Vite during the native Apollo build. The package is not
+currently published to NPM; `npm pack` from the repository root produces it locally.
 
 #### FreeBSD
 > [!CAUTION]
@@ -243,8 +246,8 @@ MSYS2 Node.js package is not supported because its shared runtime cannot load th
 Ensure [git](https://git-scm.com) is installed on your system, then clone the repository using the following command:
 
 ```bash
-git clone https://github.com/ClassicOldSong/Apollo.git --recurse-submodules
-cd Apollo
+git clone https://github.com/leonidas10009/Apollo_2026.git --recurse-submodules
+cd Apollo_2026
 mkdir build
 ```
 
@@ -294,9 +297,22 @@ ninja -C build
 }
 
 ### Remote Build
-It may be beneficial to build remotely in some cases. This will enable easier building on different operating systems.
+Apollo does not currently publish a native CI pipeline. `.github/workflows/ci.yml` validates the
+Web UI, the PowerShell setup scripts, conflict markers and localization JSON; native Windows,
+Linux and macOS binaries are built locally with the commands above until Apollo-owned runners
+and signing credentials are configured.
 
-1. Fork the project
-2. Activate workflows
-3. Trigger the *CI* workflow manually
-4. Download the artifacts/binaries from the workflow run summary
+### Versioning
+Apollo release versions use the calendar scheme `YYYY.MMDD.patch`
+(for example `2026.1120.1`). `project(Apollo VERSION ...)` in `CMakeLists.txt` declares the
+release version. Builds from `main` use that version verbatim; feature branches append the
+short commit hash, and dirty working trees append `-dirty`.
+
+For CI or reproducible release builds, set both environment variables before configuring:
+
+```bash
+BUILD_VERSION=2026.1120.1 BRANCH=main cmake -B build -G Ninja -S .
+```
+
+Create the matching Git tag (`v2026.1120.1`) when publishing a release so the source archive
+and the binary version stay aligned.

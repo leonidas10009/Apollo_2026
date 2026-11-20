@@ -1,9 +1,6 @@
 import { mount, flushPromises } from '@vue/test-utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('../../src_assets/common/assets/web/Navbar.vue', () => ({
-  default: { template: '<div />' },
-}))
 vi.mock('../../src_assets/common/assets/web/ResourceCard.vue', () => ({
   default: { template: '<div />' },
 }))
@@ -38,10 +35,10 @@ async function mountHome(platform, { developmentVersion = true, licensed = true,
     if (url === './api/logs') {
       return { text: async () => '' }
     }
-    if (url === 'https://api.github.com/repos/ClassicOldSong/Apollo/releases/latest') {
+    if (url === 'https://api.github.com/repos/leonidas10009/Apollo_2026/releases/latest') {
       return { json: async () => ({ tag_name: 'v2026.927.1200' }) }
     }
-    if (url === 'https://api.github.com/repos/ClassicOldSong/Apollo/releases') {
+    if (url === 'https://api.github.com/repos/leonidas10009/Apollo_2026/releases') {
       return { json: async () => [{ tag_name: 'v2026.927.1200', prerelease: true }] }
     }
     throw new Error(`Unexpected fetch: ${url}`)

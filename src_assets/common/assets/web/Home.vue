@@ -357,11 +357,20 @@
         } catch (e) {
           console.error('Failed to fetch clients:', e);
         }
-        console.log("Version: ", this.version.version)
-        this.githubVersion = new SunshineVersion(await fetch("https://api.github.com/repos/ClassicOldSong/Apollo/releases/latest").then((r) => r.json()), null);
-        console.log("GitHub Version: ", this.githubVersion.version)
-        this.preReleaseVersion = new SunshineVersion((await fetch("https://api.github.com/repos/ClassicOldSong/Apollo/releases").then((r) => r.json())).find(release => release.prerelease), null);
-        console.log("Pre-Release Version: ", this.preReleaseVersion.version)
+        console.debug("Version: ", this.version.version)
+        try {
+          const stableRelease = await fetch("https://api.github.com/repos/leonidas10009/Apollo_2026/releases/latest").then((r) => r.json());
+          this.githubVersion = new SunshineVersion(stableRelease, null);
+        } catch (e) {
+          console.debug("Stable release check unavailable:", e);
+        }
+        try {
+          const releases = await fetch("https://api.github.com/repos/leonidas10009/Apollo_2026/releases").then((r) => r.json());
+          const preRelease = Array.isArray(releases) ? releases.find(release => release.prerelease) : null;
+          this.preReleaseVersion = preRelease ? new SunshineVersion(preRelease, null) : null;
+        } catch (e) {
+          console.debug("Pre-release check unavailable:", e);
+        }
 
         // Read the broker version on both platforms to identify development builds.
         if (this.platform === 'windows' || this.platform === 'macos') {

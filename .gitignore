@@ -49,6 +49,10 @@ coverage/
 junit.xml
 .vitest/
 
+# Test run artifacts
+test_sunshine.log*
+write_file_test_*.txt
+
 # Translations
 *.mo
 *.pot

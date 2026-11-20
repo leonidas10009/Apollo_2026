@@ -15,7 +15,7 @@ param(
 )
 
 # Constants
-$DocsUrl = "https://docs.lizardbyte.dev/projects/sunshine"
+$DocsUrl = "https://github.com/leonidas10009/Apollo_2026/tree/main/docs"
 
 # Set preference variables for output streams
 $InformationPreference = 'Continue'

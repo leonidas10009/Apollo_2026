@@ -1,10 +1,6 @@
 import { mount, flushPromises } from '@vue/test-utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('../../src_assets/common/assets/web/Navbar.vue', () => ({
-  default: { template: '<div />' },
-}))
-
 import Troubleshooting from '../../src_assets/common/assets/web/Troubleshooting.vue'
 import createSunshineI18n from '../../src_assets/common/assets/web/locale.js'
 import en from '../../src_assets/common/assets/web/public/assets/locale/en.json'

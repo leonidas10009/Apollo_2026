@@ -34,8 +34,10 @@ primary reference:
 
 > [!NOTE]
 > Some inherited upstream commands, package names, environment variables, and paths still
-> use `sunshine`/`Sunshine` where those are the actual binary, artifact, or compatibility
-> identifiers. Apollo-specific behavior is called out in the documentation.
+> use `sunshine`/`Sunshine` where those are the actual artifact or compatibility identifiers.
+> The Windows executable is `apollo.exe`; Linux and macOS keep the upstream `sunshine`
+> binary name for packaging compatibility. Apollo-specific behavior is called out in the
+> documentation.
 
 Currently Virtual Display support is Windows only, Linux support is planned and will be implemented in the future.
 
@@ -187,11 +189,11 @@ No real time chat support will ever be provided for Apollo and Artemis. Includin
 
 **Recommended**
 
-[Releases](https://github.com/ClassicOldSong/Apollo/releases)
+[Releases](https://github.com/leonidas10009/Apollo_2026/releases)
 
 ### WinGet
 
-**Note:** Community maintained
+**Note:** Community maintained and currently tracks the original Apollo project, not Apollo 2026.
 
 In an elevated PowerShell window, run
 
@@ -204,7 +206,7 @@ You'll need WinGet installed first.
 
 ### Chocolatey
 
-**Note:** Community maintained
+**Note:** Community maintained and currently tracks the original Apollo project, not Apollo 2026.
 
 You can also install the apollo streaming server with chocolatey.
 

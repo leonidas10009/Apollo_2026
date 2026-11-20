@@ -1,15 +1,15 @@
 {
-  "name": "@classicoldsong/apollo",
-  "version": "0.0.0",
-  "description": "Prebuilt web UI assets for the Apollo game-stream host",
+  "name": "apollo-2026-web-ui",
+  "version": "2026.1120.1",
+  "description": "Prebuilt web UI assets for the Apollo 2026 game-stream host",
   "license": "GPL-3.0-only",
-  "homepage": "https://github.com/ClassicOldSong/Apollo",
+  "homepage": "https://github.com/leonidas10009/Apollo_2026",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ClassicOldSong/Apollo.git"
+    "url": "git+https://github.com/leonidas10009/Apollo_2026.git"
   },
   "bugs": {
-    "url": "https://github.com/ClassicOldSong/Apollo/issues"
+    "url": "https://github.com/leonidas10009/Apollo_2026/issues"
   },
   "files": [
     "build/assets/web/"
@@ -34,18 +34,18 @@
     "vue3-simple-icons": "16.10.0"
   },
   "devDependencies": {
-    "@codecov/vite-plugin": "2.0.1",
     "@vitejs/plugin-vue": "6.0.10",
     "@vitest/coverage-v8": "5.1.0",
     "@vue/test-utils": "2.5.1",
     "jsdom": "31.0.0",
-    "serve": "14.2.7",
+    "serve": "14.2.8",
     "vite": "8.3.8",
     "vitest": "5.1.0"
   },
   "overrides": {
-    "@codecov/vite-plugin": {
-      "vite": "$vite"
+    "js-beautify": {
+      "editorconfig": "^4.0.1",
+      "glob": "^14.0.6"
     }
   }
 }

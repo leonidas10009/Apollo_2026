@@ -2,7 +2,6 @@ import fs from 'node:fs';
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vite'
-import { codecovVitePlugin } from "@codecov/vite-plugin";
 import vue from '@vitejs/plugin-vue'
 import process from 'node:process'
 
@@ -64,15 +63,6 @@ export default defineConfig({
     plugins: [
         vue(),
         emitTrayIconsPlugin,
-        // The Codecov vite plugin should be after all other plugins
-        codecovVitePlugin({
-            enableBundleAnalysis: true,
-            bundleName: "apollo",
-            uploadToken: process.env.CODECOV_TOKEN,
-            gitService: "github",
-            dryRun: process.env.GITHUB_REPOSITORY !== 'SunshineStream/Sunshine',
-            telemetry: process.env.GITHUB_REPOSITORY === 'SunshineStream/Sunshine',
-        }),
     ],
     root: resolve(assetsSrcPath),
     build: {

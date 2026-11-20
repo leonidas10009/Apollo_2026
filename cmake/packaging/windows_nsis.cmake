@@ -1,8 +1,6 @@
 # NSIS Packaging
 # see options at: https://cmake.org/cmake/help/latest/cpack_gen/nsis.html
 
-set(CPACK_NSIS_INSTALLED_ICON_NAME "${PROJECT__DIR}\\\\${PROJECT_EXE}")
-
 # Enable detailed logging only on AMD64
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "AMD64")
     set(NSIS_LOGSET_COMMAND "LogSet on")

@@ -730,7 +730,8 @@
     "offline": "Offline",
     "disconnect": "Disconnect",
     "edit_client": "Edit client",
-    "unpair_client": "Unpair client"
+    "unpair_client": "Unpair client",
+    "pair_now": "Pair now"
   },
   "resource_card": {
     "documentation": "Documentation",

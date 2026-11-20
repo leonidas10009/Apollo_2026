@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import Pin from '../../src_assets/common/assets/web/Pin.vue'
 
@@ -17,10 +17,14 @@ describe('pin pairing helpers', () => {
 
   it('only accepts a host and a valid TCP port', () => {
     expect(Pin.computed.canSaveHost.call({ hostAddr: 'host', hostPort: '47989' })).toBe(true)
+    expect(Pin.computed.canSaveHost.call({ hostAddr: ' 10.0.0.5 ', hostPort: ' 47989 ' })).toBe(true)
     expect(Pin.computed.canSaveHost.call({ hostAddr: '', hostPort: '47989' })).toBe(false)
     expect(Pin.computed.canSaveHost.call({ hostAddr: 'host', hostPort: '0' })).toBe(false)
     expect(Pin.computed.canSaveHost.call({ hostAddr: 'host', hostPort: '65536' })).toBe(false)
     expect(Pin.computed.canSaveHost.call({ hostAddr: 'host', hostPort: 'not-a-port' })).toBe(false)
+    expect(Pin.computed.canSaveHost.call({ hostAddr: 'host', hostPort: '47989abc' })).toBe(false)
+    expect(Pin.computed.canSaveHost.call({ hostAddr: 'https://host', hostPort: '47989' })).toBe(false)
+    expect(Pin.computed.canSaveHost.call({ hostAddr: 'bad host', hostPort: '47989' })).toBe(false)
   })
 
   it('stores the manually confirmed host for the browser session', () => {
@@ -45,5 +49,15 @@ describe('pin pairing helpers', () => {
 
     sessionStorage.setItem('hostInfo', 'not json')
     expect(Pin.methods.readHostCache.call({})).toBeNull()
+  })
+
+  it('opens the generated deep link from an explicit user action', () => {
+    const open = vi.fn()
+    vi.stubGlobal('open', open)
+
+    Pin.methods.pairNow.call({ deepLink: 'art://10.0.0.5:47989?pin=1234' })
+
+    expect(open).toHaveBeenCalledWith('art://10.0.0.5:47989?pin=1234', '_blank', 'noopener')
+    vi.unstubAllGlobals()
   })
 })

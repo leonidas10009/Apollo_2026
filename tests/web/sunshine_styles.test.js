@@ -1,18 +1,11 @@
 import { mount, flushPromises } from '@vue/test-utils'
-import { parse } from '@vue/compiler-sfc'
 import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
-import navbarSource from '../../src_assets/common/assets/web/Navbar.vue?raw'
-
-vi.mock('../../src_assets/common/assets/web/Navbar.vue', () => ({
-  default: { template: '<div />' },
-}))
 
 import Featured from '../../src_assets/common/assets/web/Featured.vue'
 
-const navbarCss = parse(navbarSource).descriptor.styles[0].content
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
 const bootstrapCss = readFileSync(resolve(projectRoot, 'node_modules/bootstrap/dist/css/bootstrap.css'), 'utf8')
 const sunshineCss = readFileSync(resolve(projectRoot, 'src_assets/common/assets/web/sunshine.css'), 'utf8')
@@ -21,7 +14,7 @@ let wrapper
 
 beforeAll(() => {
   stylesheet = document.createElement('style')
-  stylesheet.textContent = [bootstrapCss, sunshineCss, navbarCss].join('\n')
+  stylesheet.textContent = [bootstrapCss, sunshineCss].join('\n')
   document.head.append(stylesheet)
 })
 

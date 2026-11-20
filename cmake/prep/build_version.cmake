@@ -1,5 +1,9 @@
 # Set build variables if env variables are defined
 # These are used in configured files such as manifests for different packages
+
+# Base release version before any branch/hash suffix is appended. It is used for
+# the calendar year/month/day fields in generated package metadata.
+set(PROJECT_VERSION_BASE ${PROJECT_VERSION})
 if(DEFINED ENV{BRANCH})
     set(GITHUB_BRANCH $ENV{BRANCH})
 endif()
@@ -24,9 +28,11 @@ if((DEFINED ENV{BRANCH}) AND (DEFINED ENV{BUILD_VERSION}))  # cmake-lint: disabl
         MESSAGE("Got from CI '$ENV{BRANCH}' branch and version '$ENV{BUILD_VERSION}'")
         set(PROJECT_VERSION $ENV{BUILD_VERSION})
         string(REGEX REPLACE "^v" "" PROJECT_VERSION ${PROJECT_VERSION})  # remove the v prefix if it exists
+        set(PROJECT_VERSION_BASE ${PROJECT_VERSION})
         set(CMAKE_PROJECT_VERSION ${PROJECT_VERSION})  # cpack will use this to set the binary versions
     endif()
 else()
+    set(PROJECT_VERSION_BASE ${PROJECT_VERSION})
     # Generate Sunshine Version based of the git tag
     # https://github.com/nocnokneo/cmake-git-versioning-example/blob/master/LICENSE
     find_package(Git)
@@ -54,10 +60,12 @@ else()
                 OUTPUT_STRIP_TRAILING_WHITESPACE
         )
         if(NOT GIT_DESCRIBE_ERROR_CODE)
-            MESSAGE("Sunshine Branch: ${GIT_DESCRIBE_BRANCH}")
-            if(NOT GIT_DESCRIBE_BRANCH STREQUAL "master")
+            MESSAGE("Apollo Branch: ${GIT_DESCRIBE_BRANCH}")
+            # Release branches keep the declared project version; feature branches
+            # append the short commit hash so development builds remain traceable.
+            if(NOT GIT_DESCRIBE_BRANCH MATCHES "^(master|main)$")
                 set(PROJECT_VERSION ${PROJECT_VERSION}-${GIT_DESCRIBE_VERSION})
-                MESSAGE("Sunshine Version: ${GIT_DESCRIBE_VERSION}")
+                MESSAGE("Apollo Version: ${GIT_DESCRIBE_VERSION}")
             endif()
             if(GIT_IS_DIRTY)
                 set(PROJECT_VERSION ${PROJECT_VERSION}-dirty)
@@ -78,8 +86,8 @@ set(PROJECT_DAY "01")
 
 # Extract year, month, and day (do this AFTER version parsing)
 # Note: Cmake doesn't support "{}" regex syntax
-if(PROJECT_VERSION MATCHES "^([0-9][0-9][0-9][0-9])\\.([0-9][0-9][0-9][0-9]?)\\.([0-9]+)$")
-    message("Extracting year and month/day from PROJECT_VERSION: ${PROJECT_VERSION}")
+if(PROJECT_VERSION_BASE MATCHES "^([0-9][0-9][0-9][0-9])\\.([0-9][0-9][0-9][0-9]?)\\.([0-9]+)$")
+    message("Extracting year and month/day from PROJECT_VERSION_BASE: ${PROJECT_VERSION_BASE}")
     # First capture group is the year
     set(PROJECT_YEAR "${CMAKE_MATCH_1}")
 

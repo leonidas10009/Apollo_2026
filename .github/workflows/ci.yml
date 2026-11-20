@@ -1,0 +1,105 @@
+---
+name: CI
+
+# Apollo-owned continuous integration. Upstream Sunshine/LizardByte workflows
+# are kept in .github/workflows-disabled until their publishing targets are
+# replaced with Apollo infrastructure.
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: "ci-${{ github.workflow }}-${{ github.ref }}"
+  cancel-in-progress: true
+
+jobs:
+  web:
+    name: Web UI
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build Web UI
+        run: npm run build
+
+      - name: Upload coverage
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: web-coverage
+          path: |
+            coverage/coverage-final.json
+            junit.xml
+          if-no-files-found: ignore
+
+  powershell:
+    name: PowerShell setup scripts
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - name: Install Pester
+        shell: powershell
+        run: |
+          Install-Module Pester -RequiredVersion 5.9.0 -Force -SkipPublisherCheck -Scope CurrentUser
+
+      - name: Run Pester tests
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Path ./build/tests -Force | Out-Null
+
+          Import-Module Pester -RequiredVersion 5.9.0 -Force
+          $config = New-PesterConfiguration
+          $config.Run.Path = "./tests/scripts"
+          $config.Run.Exit = $true
+          $config.Output.Verbosity = "Detailed"
+          $config.TestResult.Enabled = $true
+          $config.TestResult.OutputFormat = "JUnitXml"
+          $config.TestResult.OutputPath = "./build/tests/test_results.xml"
+
+          Invoke-Pester -Configuration $config
+
+  structure:
+    name: Repository structure
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - name: Reject conflict markers
+        run: |
+          if git grep -n -E '^(<<<<<<<|=======|>>>>>>>)' -- ':!third-party'; then
+            echo "::error::Conflict markers found in the repository"
+            exit 1
+          fi
+
+      - name: Validate localization JSON
+        run: |
+          for file in src_assets/common/assets/web/public/assets/locale/*.json; do
+            node -e "JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8'))" "$file"
+          done

@@ -686,7 +686,6 @@
   import { toRaw } from 'vue'
   import Checkbox from './Checkbox.vue'
   import { apiFetch } from './fetch_utils'
-  import SunshineVersion from './sunshine_version'
   import { Modal } from 'bootstrap/dist/js/bootstrap'
   import {
     ArrowDown,
@@ -825,23 +824,14 @@
         listReordered: false,
         savingOrder: false,
         deleteTarget: null,
-        version: null,
-        githubVersion: null,
         currentApp: "",
         hostName: "",
         hostUUID: "",
       };
     },
     computed: {
-      installedVersionNotStable() {
-        if (!this.githubVersion || !this.version) {
-          return false;
-        }
-        return this.version.isGreater(this.githubVersion);
-      },
       documentationBaseUrl() {
-        const docsVersion = this.installedVersionNotStable ? 'master' : 'latest'
-        return `https://docs.lizardbyte.dev/projects/sunshine/${docsVersion}`
+        return 'https://github.com/leonidas10009/Apollo_2026/tree/main/docs'
       },
       /**
        * Drag-to-reorder is only meaningful when the card order matches the persisted order.
@@ -911,13 +901,7 @@
         .then(r => r.json())
         .then(r => {
           this.platform = r.platform;
-          this.version = new SunshineVersion(null, r.version);
         });
-
-      fetch("https://api.github.com/repos/ClassicOldSong/Apollo/releases/latest")
-        .then((r) => r.json())
-        .then((r) => this.githubVersion = new SunshineVersion(r, null))
-        .catch((e) => console.error(e));
     },
     methods: {
       newApp() {

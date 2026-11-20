@@ -1,9 +1,6 @@
 import { flushPromises } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('../../src_assets/common/assets/web/Navbar.vue', () => ({
-  default: { template: '<div />' },
-}))
 vi.mock('../../src_assets/common/assets/web/fetch_utils', () => ({
   apiFetch: vi.fn(() => Promise.resolve({ status: 200, ok: true })),
 }))

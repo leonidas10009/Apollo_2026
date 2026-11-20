@@ -3,13 +3,13 @@
 > [!NOTE]
 > Apollo is based on the Sunshine 2026 codebase. This guide inherits upstream installation
 > instructions. Commands, package names, and paths that still use `sunshine`/`Sunshine` are
-> the compatible binary or artifact identifiers; Apollo-specific behavior is documented
-> below and in the [Apollo Wiki](https://github.com/ClassicOldSong/Apollo/wiki).
+> compatibility identifiers; the Windows executable is `apollo.exe`. Apollo-specific behavior
+> is documented below and in the [Apollo Wiki](https://github.com/ClassicOldSong/Apollo/wiki).
 
 The recommended method for running Apollo is to use the [binaries](#binaries) included in the
 [latest release][latest-release], unless otherwise specified.
 
-[Pre-releases](https://github.com/ClassicOldSong/Apollo/releases) are also available. These should be considered beta,
+[Pre-releases](https://github.com/leonidas10009/Apollo_2026/releases) are also available. These should be considered beta,
 and release artifacts may be missing when merging changes on a faster cadence.
 
 ## Apollo-specific features
@@ -47,12 +47,14 @@ Binaries can be found in the [latest release][latest-release].
 > [!NOTE]
 > The install examples below are inherited from Sunshine. Apollo release assets may use
 > `Apollo-*` names instead of the upstream `Sunshine-*` names shown here. Always verify the
-> exact asset name on the [Apollo releases page](https://github.com/ClassicOldSong/Apollo/releases).
+> exact asset name on the [Apollo releases page](https://github.com/leonidas10009/Apollo_2026/releases).
 
 ### Docker
 
 > [!WARNING]
 > The Docker images are not recommended for most users.
+> Apollo 2026 does not currently publish its own Docker images. The upstream Sunshine images
+> linked below do not include Apollo-specific features.
 
 Docker images are available on [Dockerhub.io](https://hub.docker.com/repository/docker/lizardbyte/sunshine)
 and [ghcr.io](https://github.com/orgs/LizardByte/packages?repo_name=sunshine).
@@ -864,4 +866,4 @@ Guides are available [here](guides.md).
 Tutorials and Guides are community generated. Want to contribute? Reach out to us on our discord server.}
 
 
-[latest-release]: https://github.com/ClassicOldSong/Apollo/releases/latest
+[latest-release]: https://github.com/leonidas10009/Apollo_2026/releases/latest

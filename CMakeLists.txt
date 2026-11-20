@@ -5,9 +5,11 @@ cmake_minimum_required(VERSION 3.24)
 # `third-party/libvirtualhid` requires 3.24
 # todo - set this conditionally
 
-project(Apollo VERSION 0.0.0
+# Apollo release versions follow the Sunshine calendar scheme (YYYY.MMDD.patch)
+# so the upstream base date remains visible while Apollo keeps its own patch counter.
+project(Apollo VERSION 2026.1120.1
         DESCRIPTION "Self-hosted game stream host for Artemis"
-        HOMEPAGE_URL "https://github.com/ClassicOldSong/Apollo")
+        HOMEPAGE_URL "https://github.com/leonidas10009/Apollo_2026")
 
 # Minimum separately installed Virtual HID Broker version supported by this build.
 set(LIBVIRTUALHID_MINIMUM_VERSION "2026.914.1218.10")
