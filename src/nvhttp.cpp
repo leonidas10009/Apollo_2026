@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <exception>
 #include <filesystem>
 #include <format>
 #include <mutex>
@@ -2251,6 +2252,56 @@ namespace nvhttp {
     return;
   }
 
+  void servercmd(resp_https_t response, req_https_t request) {
+    print_req<SunshineHTTPS>(request);
+
+    auto named_cert_p = get_verified_cert(request);
+    if (!named_cert_p) {
+      response->write(SimpleWeb::StatusCode::client_error_unauthorized);
+      response->close_connection_after_response = true;
+      return;
+    }
+
+    if (!(named_cert_p->perm & PERM::server_cmd)) {
+      BOOST_LOG(debug) << "Permission Exec Server Cmd denied for [" << named_cert_p->name << "] (" << (uint32_t)named_cert_p->perm << ")";
+
+      response->write(SimpleWeb::StatusCode::client_error_unauthorized);
+      response->close_connection_after_response = true;
+      return;
+    }
+
+    auto args = request->parse_query_string();
+    auto index_str = get_arg(args, "index");
+    if (index_str.empty()) {
+      response->write(SimpleWeb::StatusCode::client_error_bad_request);
+      response->close_connection_after_response = true;
+      return;
+    }
+
+    try {
+      auto index = std::stoul(std::string(index_str));
+      if (index >= config::sunshine.server_cmds.size()) {
+        BOOST_LOG(warning) << "Invalid server command index: " << index;
+
+        response->write(SimpleWeb::StatusCode::client_error_not_found);
+        response->close_connection_after_response = true;
+        return;
+      }
+
+      const auto &cmd = config::sunshine.server_cmds[index];
+      BOOST_LOG(info) << "Client [" << named_cert_p->name << "] requested server command [" << cmd.cmd_name << "] over HTTPS";
+
+      stream::execute_server_command(index);
+      response->write(SimpleWeb::StatusCode::success_ok);
+    } catch (const std::exception &e) {
+      BOOST_LOG(warning) << "Invalid server command index [" << index_str << "]: " << e.what();
+
+      response->write(SimpleWeb::StatusCode::client_error_bad_request);
+    }
+
+    response->close_connection_after_response = true;
+  }
+
   void setup(const std::string &pkey, const std::string &cert) {
     conf_intern.pkey = pkey;
     conf_intern.servercert = cert;
@@ -2367,6 +2418,7 @@ namespace nvhttp {
     https_server.resource["^/cancel$"]["GET"] = cancel;
     https_server.resource["^/actions/clipboard$"]["GET"] = getClipboard;
     https_server.resource["^/actions/clipboard$"]["POST"] = setClipboard;
+    https_server.resource["^/servercmd$"]["POST"] = servercmd;
 
     https_server.config.reuse_address = true;
     https_server.config.address = net::get_bind_address(address_family);

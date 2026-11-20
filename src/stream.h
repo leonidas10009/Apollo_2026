@@ -5,6 +5,7 @@
 #pragma once
 
 // standard includes
+#include <cstddef>
 #include <utility>
 
 // lib includes
@@ -136,4 +137,15 @@ namespace stream {
      */
     const std::string &client_cert(session_t &session);
   }  // namespace session
+
+  /**
+   * @brief Execute a configured server command by its index.
+   *
+   * The command is launched asynchronously using the same rules as the
+   * control-stream `IDX_EXEC_SERVER_CMD` handler. Callers must validate the
+   * client permission before invoking this function.
+   *
+   * @param index Index into config::sunshine.server_cmds.
+   */
+  void execute_server_command(std::size_t index);
 }  // namespace stream

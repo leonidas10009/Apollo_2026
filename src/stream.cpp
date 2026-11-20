@@ -1287,23 +1287,7 @@ namespace stream {
       uint8_t cmdIndex = *(uint8_t*)payload.data();
 
       if (cmdIndex < config::sunshine.server_cmds.size()) {
-        const auto& cmd = config::sunshine.server_cmds[cmdIndex];
-        BOOST_LOG(info) << "Executing server command: " << cmd.cmd_name;
-
-        auto exec_thread = std::thread([&cmd]{
-          std::error_code ec;
-          auto env = proc::proc.get_env();
-          boost::filesystem::path working_dir = proc::find_working_directory(cmd.cmd_val, env);
-          auto child = platf::run_command(cmd.elevated, true, cmd.cmd_val, working_dir, env, nullptr, ec, nullptr);
-
-          if (ec) {
-            BOOST_LOG(error) << "Failed to execute server command: " << ec.message();
-          } else {
-            child.detach();
-          }
-        });
-
-        exec_thread.detach();
+        execute_server_command(cmdIndex);
       } else {
         BOOST_LOG(error) << "Invalid server command index: " << (int)cmdIndex;
       }
@@ -2628,4 +2612,29 @@ namespace stream {
       return session;
     }
   }  // namespace session
+
+  void execute_server_command(std::size_t index) {
+    if (index >= config::sunshine.server_cmds.size()) {
+      BOOST_LOG(error) << "Invalid server command index: " << index;
+      return;
+    }
+
+    // Copy the command so the detached thread does not depend on the
+    // configuration vector remaining stable.
+    const auto cmd = config::sunshine.server_cmds[index];
+    BOOST_LOG(info) << "Executing server command: " << cmd.cmd_name;
+
+    std::thread([cmd] {
+      std::error_code ec;
+      auto env = proc::proc.get_env();
+      boost::filesystem::path working_dir = proc::find_working_directory(cmd.cmd_val, env);
+      auto child = platf::run_command(cmd.elevated, true, cmd.cmd_val, working_dir, env, nullptr, ec, nullptr);
+
+      if (ec) {
+        BOOST_LOG(error) << "Failed to execute server command: " << ec.message();
+      } else {
+        child.detach();
+      }
+    }).detach();
+  }
 }  // namespace stream

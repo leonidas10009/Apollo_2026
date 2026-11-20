@@ -292,8 +292,11 @@ consent prompt for directory ACLs, so the Web UI shows setup steps for correctin
     <tr>
         <td>Description</td>
         <td colspan="2">
-            A list of named commands that can be executed from the client during streaming.
+            A list of named commands that can be executed from the client during streaming
+            or through the authenticated <code>POST /servercmd?index=N</code> HTTPS endpoint.
             Each entry has a <b>name</b>, a <b>cmd</b>, and an optional <b>elevated</b> flag.
+            The HTTPS endpoint requires a paired client certificate with the
+            <b>server_cmd</b> permission.
         </td>
     </tr>
     <tr>
@@ -305,10 +308,16 @@ consent prompt for directory ACLs, so the Web UI shows setup steps for correctin
     <tr>
         <td>Example</td>
         <td colspan="2">@code{}
-            server_cmd = [{"name":"Bubbles","cmd":"bubbles.scr","elevated":false}]
+            server_cmd = [{"name":"Bubbles","cmd":"bubbles.scr","elevated":false},{"name":"Shut down PC","cmd":"shutdown /s /t 5","elevated":true},{"name":"Restart PC","cmd":"shutdown /r /t 5","elevated":true}]
             @endcode</td>
     </tr>
 </table>
+
+> **Security:** `server_cmd` can execute arbitrary commands on the host. Grant the
+> `server_cmd` client permission only to trusted devices. Power commands should use a
+> short delay (`shutdown /t 5`) and a cancel command (`shutdown /a`) where possible.
+> The `/servercmd` endpoint is available only over HTTPS with a paired client
+> certificate.
 
 ### notify_pre_releases
 
