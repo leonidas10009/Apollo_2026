@@ -20,6 +20,12 @@ Apollo 2026 is a continuation of **Apollo**, originally created by
 The full Git history, authorship, GPL-3.0 license, and upstream notices are retained. See
 [CREDITS.md](CREDITS.md) for details.
 
+## Reusable components
+
+- [`libs/apollo-input`](libs/apollo-input/README.md) — standalone MIT-licensed C++ input
+  abstraction library with ViGEmBus (Windows) and uinput (Linux) backends. It is independent of
+  Apollo and can be embedded in other projects with `add_subdirectory` or `find_package`.
+
 ## Usage
 
 Apollo is based on the Sunshine 2026 codebase. The documentation in this repository is the
