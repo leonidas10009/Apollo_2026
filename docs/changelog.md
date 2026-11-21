@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased — session and app cleanup
+## Apollo 2026 1.0.2 — 2026-11-21
+
+Maintenance release with controller integration, session cleanup and Web UI updates.
+
+### Session and app cleanup
 
 - The default Windows **Steam Big Picture** entry now uses `steam://exit` and
   `terminate-on-pause`, so leaving Big Picture and closing Steam happen when the
@@ -12,9 +16,7 @@
 - Added regression coverage for the default Windows Steam entry and for app UUID
   generation/preservation.
 
-## Unreleased — ApolloInput Nova 0.3.0
-
-Apollo HID backend update.
+### ApolloInput Nova 0.3.0
 
 - Vendored `libs/apollo-input` **0.3.0** with the native **Apollo HID**
   (UMDF2 + VHF) backend for Windows.
@@ -28,15 +30,12 @@ Apollo HID backend update.
 - The host does **not** select Apollo HID yet: `gamepad_driver` is unchanged and
   virtual pads continue to use ViGEmBus/libvirtualhid. Integration is tracked in
   `apollo HID/docs/RELEASE-READINESS.md`.
-- Tests: 2/2 `apollo-input` tests in the standalone and nested checkouts.
 
-## Unreleased — ApolloInput Nova 0.2.0
+### Gamepad precision and compatibility
 
-Gamepad precision and compatibility update.
-
-- Vendored `libs/apollo-input` **0.2.0** (ApolloInput Nova) with profiles for
-  Xbox Elite, DualSense Edge, Steam Controller and Steam Deck, plus trigger
-  rumble, player LEDs, battery, paddles, misc buttons and `Button::misc2`.
+- Added profiles for Xbox Elite, DualSense Edge, Steam Controller and Steam Deck,
+  plus trigger rumble, player LEDs, battery, paddles, misc buttons and
+  `Button::misc2`.
 - Added `recommended_profile()`, `profile_capabilities()`, `profile_identity()`,
   `profile_compatibility_chain()` and `Backend::create_compatible()`.
 - Added radial stick deadzone, center snap, trigger deadzone and
@@ -57,7 +56,7 @@ Gamepad precision and compatibility update.
   active host backend and the precision values, and clarifies that advanced
   profiles require Virtual HID Broker.
 - Added controller compatibility and integration documentation.
-- Tests: 946 C++ tests (933 pass, 13 skipped, 0 failures), 258 Web UI tests and
+- Tests: 948 C++ tests (935 pass, 13 skipped, 0 failures), 258 Web UI tests and
   2/2 `apollo-input` tests.
 
 ## Apollo 2026 1.0.1 — 2026-11-20

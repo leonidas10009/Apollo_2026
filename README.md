@@ -66,10 +66,10 @@ The full Git history, authorship, GPL-3.0 license, and upstream notices are reta
 
 ## Current status
 
-**Apollo 2026 1.0.1** is the current release, based on Sunshine `2026.1116.25010`.
+**Apollo 2026 1.0.2** is the current release, based on Sunshine `2026.1116.25010`.
 
 - Windows binaries: `apollo.exe`, NSIS installer and portable ZIP.
-- Native tests: **946 tests / 933 pass / 13 skipped / 0 failed** (last recorded run).
+- Native tests: **948 tests / 935 pass / 13 skipped / 0 failed** (last recorded run).
 - Web UI: **258 tests pass**; `npm audit` reports 0 vulnerabilities.
 - Remote server commands: authenticated `POST /servercmd?index=N` for power actions
   from Artemis without starting a stream.
