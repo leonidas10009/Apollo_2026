@@ -31,6 +31,11 @@ and applications to Apollo.
 > Steam is launched as a detached command because Steam starts with a process that self updates itself and the original
 > process is killed.
 
+> [!TIP]
+> To close Steam when the last client disconnects, enable **Terminate on Pause** in the
+> application settings. The default Windows entry enables it and uses `steam://exit`,
+> which leaves Big Picture and closes the Steam client instead of only leaving Big Picture.
+
 @tabs_grouped{platform|:|
   @tab{FreeBSD |:| <!-- -->
     \| Field                        \| Value                                                \|
@@ -60,8 +65,9 @@ and applications to Apollo.
     \| Field                        \| Value                                     \|
     \|------------------------------\|-------------------------------------------\|
     \| Application Name             \| @code{}Steam Big Picture@endcode          \|
-    \| Command Preparations -> Undo \| @code{}steam://close/bigpicture@endcode   \|
+    \| Command Preparations -> Undo \| @code{}steam://exit@endcode               \|
     \| Detached Commands            \| @code{}steam://open/bigpicture@endcode    \|
+    \| Terminate on Pause            \| @code{}true@endcode                       \|
     \| Image                        \| @code{}steam.png@endcode                  \|
   }
 }

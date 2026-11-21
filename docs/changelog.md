@@ -1,5 +1,65 @@
 # Changelog
 
+## Unreleased — session and app cleanup
+
+- The default Windows **Steam Big Picture** entry now uses `steam://exit` and
+  `terminate-on-pause`, so leaving Big Picture and closing Steam happen when the
+  last client disconnects instead of leaving the Steam window open on the desktop.
+- Creating an application in the Web UI now assigns a UUID, and editing an app
+  without sending its UUID preserves the existing identity.
+- Repeated `proc::terminate()` calls are now safe no-ops, and stale prep-command
+  iterators are cleared after termination.
+- Added regression coverage for the default Windows Steam entry and for app UUID
+  generation/preservation.
+
+## Unreleased — ApolloInput Nova 0.3.0
+
+Apollo HID backend update.
+
+- Vendored `libs/apollo-input` **0.3.0** with the native **Apollo HID**
+  (UMDF2 + VHF) backend for Windows.
+- Apollo HID supports `generic`, `dualshock4`, DS5/Edge, Xbox
+  One/Series/Elite, Switch Pro and Steam Controller/Deck. Advanced profiles use
+  compatibility HID descriptors; Xbox profiles are HID, not XInput.
+- Apollo HID supports one client handle per virtual device, up to 8 simultaneous
+  controllers and DS4/DS5 feedback/touchpad/IMU.
+- Added safe PnP driver-version probing; the backend refuses driver 0.1.0.5
+  before opening a control handle.
+- The host does **not** select Apollo HID yet: `gamepad_driver` is unchanged and
+  virtual pads continue to use ViGEmBus/libvirtualhid. Integration is tracked in
+  `apollo HID/docs/RELEASE-READINESS.md`.
+- Tests: 2/2 `apollo-input` tests in the standalone and nested checkouts.
+
+## Unreleased — ApolloInput Nova 0.2.0
+
+Gamepad precision and compatibility update.
+
+- Vendored `libs/apollo-input` **0.2.0** (ApolloInput Nova) with profiles for
+  Xbox Elite, DualSense Edge, Steam Controller and Steam Deck, plus trigger
+  rumble, player LEDs, battery, paddles, misc buttons and `Button::misc2`.
+- Added `recommended_profile()`, `profile_capabilities()`, `profile_identity()`,
+  `profile_compatibility_chain()` and `Backend::create_compatible()`.
+- Added radial stick deadzone, center snap, trigger deadzone and
+  `Device::set_deadzone()`.
+- Made the Linux uinput backend profile-aware with profile-specific USB identity
+  and extra buttons.
+- Added the Windows controller tester; the standalone library also ships a
+  browser-based visual tester.
+- Apollo host: added `gamepad_stick_deadzone` (0–30 %, default 3) and
+  `gamepad_trigger_deadzone` (0–30 %, default 2), radial filtering, resume
+  neutralization and `LI_CTYPE_STEAM` detection.
+- Web UI: deadzone controls and English locale strings.
+- Web UI: application posters keep their aspect ratio with a contained image and
+  a blurred backdrop instead of cropping square or landscape art.
+- Web UI: Featured Apps is now a local directory with **Artemis 2026** only;
+  official Moonlight clients are no longer advertised by Apollo.
+- Web UI: the Input tab shows the ApolloInput Nova integration status, the
+  active host backend and the precision values, and clarifies that advanced
+  profiles require Virtual HID Broker.
+- Added controller compatibility and integration documentation.
+- Tests: 946 C++ tests (933 pass, 13 skipped, 0 failures), 258 Web UI tests and
+  2/2 `apollo-input` tests.
+
 ## Apollo 2026 1.0.1 — 2026-11-20
 
 Maintenance release focused on remote power control.

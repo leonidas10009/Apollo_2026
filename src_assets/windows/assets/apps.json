@@ -11,13 +11,14 @@
       "prep-cmd": [
         {
           "do": "",
-          "undo": "steam://close/bigpicture",
+          "undo": "steam://exit",
           "elevated": false
         }
       ],
       "detached": [
         "steam://open/bigpicture"
       ],
+      "terminate-on-pause": true,
       "image-path": "steam.png"
     }
   ]

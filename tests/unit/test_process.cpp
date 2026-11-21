@@ -6,6 +6,7 @@
 #include "../tests_common.h"
 
 // standard includes
+#include <algorithm>
 #include <cstdlib>
 #include <filesystem>
 #include <format>
@@ -16,6 +17,7 @@
 
 // lib includes
 #include <boost/process/v1.hpp>
+#include <nlohmann/json.hpp>
 
 #ifdef _WIN32
   // lib includes
@@ -169,6 +171,27 @@ TEST(ProcessTest, PrepLaunchErrorsAbortDesktopLaunch) {
 
   EXPECT_EQ(process.execute(42, std::make_shared<rtsp_stream::launch_session_t>()), -1);
   EXPECT_EQ(process.running(), 0);
+}
+
+TEST(ProcessTest, DefaultWindowsSteamEntryClosesSteamOnSessionEnd) {
+  std::ifstream input(fs::path(SUNSHINE_SOURCE_DIR) / "src_assets" / "windows" / "assets" / "apps.json");
+  ASSERT_TRUE(input.is_open());
+
+  nlohmann::json tree;
+  input >> tree;
+
+  const auto &apps = tree.at("apps");
+  const auto steam = std::find_if(apps.begin(), apps.end(), [](const nlohmann::json &app) {
+    return app.value("name", "") == "Steam Big Picture";
+  });
+  ASSERT_NE(steam, apps.end());
+
+  EXPECT_TRUE(steam->value("terminate-on-pause", false));
+  ASSERT_TRUE(steam->contains("prep-cmd"));
+  const auto &prep = steam->at("prep-cmd");
+  ASSERT_TRUE(prep.is_array());
+  ASSERT_FALSE(prep.empty());
+  EXPECT_EQ(prep.at(0).value("undo", ""), "steam://exit");
 }
 
 #ifdef _WIN32

@@ -2177,6 +2177,41 @@ TEST_F(ConfigHttpTest, SaveAppNormalizesOptionalImagePath) {
   }
 }
 
+TEST_F(ConfigHttpTest, SaveAppGeneratesAndPreservesAppUuid) {
+  using json = nlohmann::json;
+  ScopedSaveAppAppsFile apps_file("save_app_uuid");
+  {
+    std::ofstream file(config::stream.file_apps);
+    file << json {{"version", 2}, {"env", json::object()}, {"apps", json::array()}}.dump();
+  }
+
+  const auto headers = authenticated_json_headers();
+  const json new_app {{"name", "UUID test"}, {"index", -1}};
+  const auto create_response = client->request("POST", "/api/apps", new_app.dump(), headers);
+  ASSERT_EQ(create_response->status_code, "200 OK");
+  EXPECT_TRUE(json::parse(create_response->content.string()).at("status").get<bool>());
+
+  std::string uuid;
+  {
+    std::ifstream file(config::stream.file_apps);
+    const auto saved = json::parse(file);
+    ASSERT_EQ(saved.at("apps").size(), 1U);
+    uuid = saved.at("apps").at(0).value("uuid", "");
+    ASSERT_EQ(uuid.size(), 36U);
+  }
+
+  const json edit_app {{"name", "UUID test edited"}, {"index", 0}};
+  const auto edit_response = client->request("POST", "/api/apps", edit_app.dump(), headers);
+  ASSERT_EQ(edit_response->status_code, "200 OK");
+  EXPECT_TRUE(json::parse(edit_response->content.string()).at("status").get<bool>());
+
+  std::ifstream file(config::stream.file_apps);
+  const auto saved = json::parse(file);
+  ASSERT_EQ(saved.at("apps").size(), 1U);
+  EXPECT_EQ(saved.at("apps").at(0).value("uuid", ""), uuid);
+  EXPECT_EQ(saved.at("apps").at(0).value("name", ""), "UUID test edited");
+}
+
 TEST_F(ConfigHttpTest, ReorderAppsPersistsManualOrderAndKeepsUnknownApps) {
   using json = nlohmann::json;
   ScopedSaveAppAppsFile apps_file("reorder_apps");

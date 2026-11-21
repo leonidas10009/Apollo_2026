@@ -804,6 +804,13 @@ namespace proc {
   }
 
   void proc_t::terminate(bool immediate, bool needs_refresh) {
+    // terminate() is intentionally called at the start of execute() and from
+    // several shutdown paths. Make repeated calls a no-op once the previous
+    // termination has already released the app, process group, and session.
+    if (_app_id <= 0 && !placebo && !_process.valid() && !_process_group.valid()) {
+      return;
+    }
+
     input::terminate_gamepads();
 
     std::error_code ec;
@@ -900,6 +907,11 @@ namespace proc {
     _app_id = -1;
     _app_name.clear();
     _app = {};
+    // The prep-command iterators point into _app.prep_cmds. Reset them before
+    // returning so a second terminate() (for example pause() followed by an
+    // app switch or quit) never compares dangling iterators.
+    _app_prep_it = {};
+    _app_prep_begin = {};
     display_name.clear();
     initial_display.clear();
     mode_changed_display.clear();

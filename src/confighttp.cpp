@@ -1270,6 +1270,17 @@ namespace confighttp {
       auto &apps_node = file_tree["apps"];
       int index = input_tree["index"].get<int>();  // this will intentionally cause an exception if the provided value is the wrong type
 
+      // New apps must own a UUID before they reach proc::refresh(). Editing an
+      // existing app without sending its UUID must keep the original identity,
+      // otherwise virtual-display persistence and client app IDs would change.
+      if (!input_tree.contains("uuid") || !input_tree["uuid"].is_string() || input_tree["uuid"].get<std::string>().empty()) {
+        if (index >= 0 && static_cast<std::size_t>(index) < apps_node.size() && apps_node[index].contains("uuid")) {
+          input_tree["uuid"] = apps_node[index]["uuid"];
+        } else {
+          input_tree["uuid"] = uuid_util::uuid_t::generate().string();
+        }
+      }
+
       input_tree.erase("index");
 
       if (index == -1) {
