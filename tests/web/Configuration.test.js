@@ -98,6 +98,43 @@ describe('configuration accessibility', () => {
   })
 })
 
+describe('ApolloInput Nova status panel', () => {
+  it('reports the active backend and precision settings', async () => {
+    const config = {
+      controller: 'enabled',
+      gamepad_driver: 'vigembus',
+      gamepad_stick_deadzone: 3,
+      gamepad_trigger_deadzone: 2,
+    }
+    const wrapper = mount(Inputs, {
+      props: { platform: 'windows', config },
+      global: globalOptions,
+    })
+    const panel = wrapper.get('.apollo-input-status')
+
+    expect(panel.text()).toContain('config.apollo_input_title')
+    expect(panel.text()).toContain('config.gamepad_driver_vigembus')
+    expect(panel.text()).toContain('config.apollo_input_precision_value')
+
+    await wrapper.get('#gamepad_driver').setValue('virtualhid')
+    expect(panel.text()).toContain('config.gamepad_driver_virtualhid')
+    wrapper.unmount()
+  })
+
+  it('reports disabled gamepad input', () => {
+    const wrapper = mount(Inputs, {
+      props: {
+        platform: 'windows',
+        config: { controller: 'disabled', gamepad_driver: 'vigembus' },
+      },
+      global: globalOptions,
+    })
+
+    expect(wrapper.get('.apollo-input-status').text()).toContain('config.apollo_input_backend_disabled')
+    wrapper.unmount()
+  })
+})
+
 describe('network configuration', () => {
   it('uses the default Moonlight port when the configured port is absent', () => {
     const wrapper = mount(Network, {

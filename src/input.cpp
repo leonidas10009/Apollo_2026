@@ -24,6 +24,7 @@ extern "C" {
 #include <string_view>
 #include <thread>
 #include <unordered_map>
+#include <utility>
 
 // lib includes
 #include <boost/endian/buffers.hpp>
@@ -87,6 +88,101 @@ namespace input {
     DOWN,  ///< Button is down
     UP  ///< Button is up
   };
+
+  namespace {
+    /**
+     * @brief Maximum accepted analog deadzone percentage.
+     */
+    constexpr int MAX_GAMEPAD_DEADZONE_PERCENT = 30;
+
+    /**
+     * @brief Clamp a configured deadzone to the supported range.
+     *
+     * @param percent Configured percentage.
+     * @return Percentage in the inclusive range 0-30.
+     */
+    int gamepad_deadzone_percent(int percent) {
+      return std::clamp(percent, 0, MAX_GAMEPAD_DEADZONE_PERCENT);
+    }
+
+    /**
+     * @brief Convert a signed stick axis to a symmetric normalized value.
+     *
+     * @param value Signed 16-bit axis value.
+     * @return Axis value in the inclusive range -1.0 to 1.0.
+     */
+    float normalize_stick_axis(std::int16_t value) {
+      return value < 0 ? static_cast<float>(value) / 32768.0F : static_cast<float>(value) / 32767.0F;
+    }
+
+    /**
+     * @brief Convert a normalized stick axis back to the protocol range.
+     *
+     * @param value Normalized axis value.
+     * @return Signed 16-bit axis value.
+     */
+    std::int16_t denormalize_stick_axis(float value) {
+      const auto scaled = value < 0 ? value * 32768.0F : value * 32767.0F;
+      return static_cast<std::int16_t>(std::clamp<std::int32_t>(static_cast<std::int32_t>(std::lround(scaled)), -32768, 32767));
+    }
+
+    /**
+     * @brief Apply a radial deadzone and snap tiny stick movement to the center.
+     *
+     * The radial deadzone avoids the diagonal drift and axis-independent jitter
+     * produced by per-axis thresholds. Values outside the deadzone are rescaled
+     * so the full physical travel still reaches the protocol endpoints.
+     *
+     * @param x Horizontal axis value.
+     * @param y Vertical axis value.
+     * @return Sanitized horizontal and vertical axis values.
+     */
+    std::pair<std::int16_t, std::int16_t> sanitize_stick(std::int16_t x, std::int16_t y) {
+      const auto deadzone = static_cast<float>(gamepad_deadzone_percent(config::input.gamepad_stick_deadzone)) / 100.0F;
+      if (deadzone <= 0.0F) {
+        return {x, y};
+      }
+
+      auto nx = normalize_stick_axis(x);
+      auto ny = normalize_stick_axis(y);
+      const auto magnitude = std::sqrt(nx * nx + ny * ny);
+      if (magnitude <= deadzone) {
+        return {0, 0};
+      }
+
+      const auto clamped_magnitude = std::min(magnitude, 1.0F);
+      const auto scaled_magnitude = (clamped_magnitude - deadzone) / (1.0F - deadzone);
+      const auto scale = scaled_magnitude / magnitude;
+      nx *= scale;
+      ny *= scale;
+      return {denormalize_stick_axis(nx), denormalize_stick_axis(ny)};
+    }
+
+    /**
+     * @brief Apply a deadzone to an analog trigger.
+     *
+     * Values below the deadzone are reported as fully released. Higher values
+     * are rescaled so a fully pressed trigger still reaches the maximum.
+     *
+     * @param value Trigger value in the inclusive range 0-255.
+     * @return Sanitized trigger value.
+     */
+    std::uint8_t sanitize_trigger(std::uint8_t value) {
+      const auto deadzone = gamepad_deadzone_percent(config::input.gamepad_trigger_deadzone);
+      if (deadzone <= 0) {
+        return value;
+      }
+
+      const auto threshold = static_cast<int>(std::lround(255.0 * deadzone / 100.0));
+      if (value <= threshold) {
+        return 0;
+      }
+      if (threshold >= 255) {
+        return 255;
+      }
+      return static_cast<std::uint8_t>(std::lround((value - threshold) * 255.0 / (255 - threshold)));
+    }
+  }  // namespace
 
   /**
    * @brief Allocate an available input slot identifier.
@@ -442,6 +538,18 @@ namespace input {
       if (gamepad.id < 0) {
         continue;
       }
+
+      if (gamepad.back_timeout_id) {
+        task_pool.cancel(gamepad.back_timeout_id);
+        gamepad.back_timeout_id = nullptr;
+      }
+
+      // A paused client can leave a stick or trigger at its last value. Push a
+      // neutral report before routing feedback to the resumed connection so the
+      // virtual controller cannot keep a stale axis or button pressed.
+      platf::gamepad_update(platf_input, gamepad.id, {});
+      gamepad.gamepad_state = {};
+      gamepad.back_button_state = button_state_e::NONE;
 
       if (platf::rebind_gamepad(platf_input, {gamepad.id, static_cast<std::uint8_t>(client_index)}, input->feedback_queue) != 0) {
         free_id(gamepadMask, gamepad.id);
@@ -1379,6 +1487,17 @@ namespace input {
       // Resume-time motion requests can arrive before the client assigns this
       // controller slot. Replay them after its arrival, without recreating the
       // virtual device, and clear feedback deduplication for the ready client.
+      if (gamepad.back_timeout_id) {
+        task_pool.cancel(gamepad.back_timeout_id);
+        gamepad.back_timeout_id = nullptr;
+      }
+
+      // Clear any axis or button retained from the paused connection before
+      // the fresh client state arrives.
+      platf::gamepad_update(platf_input, gamepad.id, {});
+      gamepad.gamepad_state = {};
+      gamepad.back_button_state = button_state_e::NONE;
+
       if (platf::rebind_gamepad(platf_input, {gamepad.id, static_cast<std::uint8_t>(client_index)}, input->feedback_queue) != 0) {
         BOOST_LOG(warning) << "Failed to rebind retained controller ["sv << client_index << ']';
         return -1;
@@ -1691,14 +1810,16 @@ namespace input {
 
     std::uint16_t bf = packet->buttonFlags;
     std::uint32_t bf2 = packet->buttonFlags2;
+    const auto [left_x, left_y] = sanitize_stick(packet->leftStickX, packet->leftStickY);
+    const auto [right_x, right_y] = sanitize_stick(packet->rightStickX, packet->rightStickY);
     platf::gamepad_state_t gamepad_state {
       bf | (bf2 << 16),
-      packet->leftTrigger,
-      packet->rightTrigger,
-      packet->leftStickX,
-      packet->leftStickY,
-      packet->rightStickX,
-      packet->rightStickY
+      sanitize_trigger(packet->leftTrigger),
+      sanitize_trigger(packet->rightTrigger),
+      left_x,
+      left_y,
+      right_x,
+      right_y
     };
 
     auto bf_new = gamepad_state.buttonFlags;

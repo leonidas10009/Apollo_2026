@@ -199,6 +199,15 @@
     "amd_usage_webcam": "webcam -- webcam (slow)",
     "amd_vbaq": "AMF Variance Based Adaptive Quantization (VBAQ)",
     "amd_vbaq_desc": "The human visual system is typically less sensitive to artifacts in highly textured areas. In VBAQ mode, pixel variance is used to indicate the complexity of spatial textures, allowing the encoder to allocate more bits to smoother areas. Enabling this feature leads to improvements in subjective visual quality with some content.",
+    "apollo_input_backend": "Active backend",
+    "apollo_input_backend_disabled": "Gamepad input disabled",
+    "apollo_input_desc": "The ApolloInput Nova library is included in this build. Virtual gamepads are still created by the host backend selected above.",
+    "apollo_input_precision": "Precision filter",
+    "apollo_input_precision_value": "Stick {stick}% · Trigger {trigger}%",
+    "apollo_input_profiles": "Advanced profiles",
+    "apollo_input_profiles_value": "ViGEmBus supports only Xbox 360 and DualShock 4. DualSense, Switch Pro and Xbox Series require Virtual HID Broker; Elite, Edge and Steam profiles are not available in the current host backends yet.",
+    "apollo_input_status_integrated": "Integrated",
+    "apollo_input_title": "ApolloInput Nova 0.2.0",
     "apply_note": "Click 'Apply' to restart Apollo and apply changes. This will terminate any running sessions.",
     "audio_sink": "Audio Sink",
     "audio_sink_desc_linux": "The name of the audio sink used for Audio Loopback. If you do not specify this variable, pulseaudio will select the default monitor device. You can find the name of the audio sink using either command. For pactl, copy the sink name (second column) into this field:",
@@ -326,6 +335,10 @@
     "gamepad_ds5": "DS5 (PS5)",
     "gamepad_generic": "Generic HID gamepad",
     "gamepad_switch": "Nintendo Pro (Switch)",
+    "gamepad_stick_deadzone": "Stick deadzone (%)",
+    "gamepad_stick_deadzone_desc": "Radial deadzone for both sticks. Removes tiny drift and jitter without affecting normal movement. 0 disables filtering.",
+    "gamepad_trigger_deadzone": "Trigger deadzone (%)",
+    "gamepad_trigger_deadzone_desc": "Values below this percentage are treated as fully released. Prevents resting triggers from registering as pressed.",
     "gamepad_x360": "X360 (Xbox 360)",
     "gamepad_xone": "XOne (Xbox One)",
     "gamepad_xseries": "Xbox Series",
@@ -902,7 +915,7 @@
       "client": "Clients",
       "tool": "Tools"
     },
-    "description": "Discover clients, tools, and integrations that enhance your Apollo streaming experience.",
+    "description": "Official clients and tools built for Apollo 2026.",
     "docs": "Docs",
     "documentation": "Documentation",
     "get": "Get",
@@ -939,7 +952,7 @@
   "client_card": {
     "clients": "Clients",
     "clients_desc": "Clients that are specifically tuned to work the best with Apollo",
-    "generic_moonlight_clients_desc": "Generic Moonlight clients are still usable with Apollo."
+    "generic_moonlight_clients_desc": "Artemis 2026 is the supported client for Apollo 2026."
   },
   "login": {
     "save_password": "Remember Password"

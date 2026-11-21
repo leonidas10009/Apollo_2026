@@ -5,6 +5,7 @@ import VirtualKeyCodeSelect from '../VirtualKeyCodeSelect.vue'
 import { isValidVirtualKeyCode } from '../virtual_key_codes.js'
 import {
   ArrowRight,
+  Cpu,
   ExternalLink,
   Plus,
   Trash2,
@@ -80,6 +81,34 @@ const gamepadDriverSelection = computed({
 })
 
 /**
+ * @brief Translation key for the gamepad backend currently in effect.
+ *
+ * @return {string} Locale key describing the active backend or disabled state.
+ */
+const activeGamepadBackendKey = computed(() => {
+  if (config.value.controller !== 'enabled') {
+    return 'config.apollo_input_backend_disabled'
+  }
+
+  const driver = props.platform === 'macos' && !config.value.gamepad_driver
+    ? 'virtualhid'
+    : config.value.gamepad_driver
+
+  switch (driver) {
+    case 'all':
+      return 'config.gamepad_driver_all'
+    case 'virtualhid':
+      return 'config.gamepad_driver_virtualhid'
+    case 'vigembus':
+      return 'config.gamepad_driver_vigembus'
+    case 'none':
+      return 'config.gamepad_driver_none'
+    default:
+      return 'config.gamepad_driver_select'
+  }
+})
+
+/**
  * @brief Add an empty keybinding row.
  */
 function addKeybinding() {
@@ -136,6 +165,36 @@ watch(
       <div class="form-text">{{ $t(platform === 'macos' ? 'config.gamepad_driver_macos_desc' : 'config.gamepad_driver_desc') }}</div>
     </div>
 
+    <!-- ApolloInput Nova integration status -->
+    <div class="apollo-input-status mb-3" v-if="platform === 'windows' || platform === 'macos'">
+      <div class="apollo-input-status-header">
+        <div class="min-w-0">
+          <h6 class="apollo-input-status-title">
+            <cpu :size="16" class="icon"></cpu>
+            {{ $t('config.apollo_input_title') }}
+          </h6>
+          <p class="apollo-input-status-desc mb-0">{{ $t('config.apollo_input_desc') }}</p>
+        </div>
+        <span class="badge badge-primary flex-shrink-0">{{ $t('config.apollo_input_status_integrated') }}</span>
+      </div>
+      <div class="apollo-input-status-grid">
+        <div>
+          <div class="apollo-input-status-label">{{ $t('config.apollo_input_backend') }}</div>
+          <div class="apollo-input-status-value">{{ $t(activeGamepadBackendKey) }}</div>
+        </div>
+        <div>
+          <div class="apollo-input-status-label">{{ $t('config.apollo_input_precision') }}</div>
+          <div class="apollo-input-status-value">
+            {{ $t('config.apollo_input_precision_value', { stick: config.gamepad_stick_deadzone ?? 3, trigger: config.gamepad_trigger_deadzone ?? 2 }) }}
+          </div>
+        </div>
+        <div class="apollo-input-status-profiles">
+          <div class="apollo-input-status-label">{{ $t('config.apollo_input_profiles') }}</div>
+          <div class="apollo-input-status-value">{{ $t('config.apollo_input_profiles_value') }}</div>
+        </div>
+      </div>
+    </div>
+
     <!-- Emulated Gamepad Type -->
     <div class="mb-3" v-if="config.controller === 'enabled' && config.gamepad_driver !== 'none'">
       <label for="gamepad" class="form-label">{{ $t('config.gamepad') }}</label>
@@ -151,6 +210,32 @@ watch(
         <option v-if="!vigembusOnly" value="switch">{{ $t("config.gamepad_switch") }}</option>
       </select>
       <div class="form-text">{{ $t('config.gamepad_desc') }}</div>
+    </div>
+
+    <!-- Analog precision -->
+    <div class="row mb-3" v-if="config.controller === 'enabled' && config.gamepad_driver !== 'none'">
+      <div class="col-md-6">
+        <label for="gamepad_stick_deadzone" class="form-label">{{ $t('config.gamepad_stick_deadzone') }}</label>
+        <input id="gamepad_stick_deadzone"
+               class="form-control"
+               type="number"
+               min="0"
+               max="30"
+               step="1"
+               v-model.number="config.gamepad_stick_deadzone">
+        <div class="form-text">{{ $t('config.gamepad_stick_deadzone_desc') }}</div>
+      </div>
+      <div class="col-md-6">
+        <label for="gamepad_trigger_deadzone" class="form-label">{{ $t('config.gamepad_trigger_deadzone') }}</label>
+        <input id="gamepad_trigger_deadzone"
+               class="form-control"
+               type="number"
+               min="0"
+               max="30"
+               step="1"
+               v-model.number="config.gamepad_trigger_deadzone">
+        <div class="form-text">{{ $t('config.gamepad_trigger_deadzone_desc') }}</div>
+      </div>
     </div>
 
     <!-- Additional options based on gamepad type -->

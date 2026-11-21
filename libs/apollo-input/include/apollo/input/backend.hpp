@@ -21,6 +21,7 @@ namespace apollo::input {
     vigem,  ///< ViGEmBus on Windows.
     uinput,  ///< Linux uinput.
     null_backend,  ///< No-op backend useful for tests and previews.
+    apollo_hid,  ///< Apollo HID UMDF2 + VHF driver on Windows.
   };
 
   /**
@@ -40,9 +41,12 @@ namespace apollo::input {
     FeedbackType type = FeedbackType::unknown;  ///< Feedback kind.
     std::uint16_t low_frequency = 0;  ///< Low-frequency rumble motor.
     std::uint16_t high_frequency = 0;  ///< High-frequency rumble motor.
+    std::uint16_t left_trigger_rumble = 0;  ///< Left trigger motor.
+    std::uint16_t right_trigger_rumble = 0;  ///< Right trigger motor.
     std::uint8_t led_red = 0;  ///< LED red component.
     std::uint8_t led_green = 0;  ///< LED green component.
     std::uint8_t led_blue = 0;  ///< LED blue component.
+    std::uint8_t player_leds = 0;  ///< Player LED bitmask, when reported.
     std::uint8_t trigger = 0;  ///< Trigger index for adaptive effects.
     std::uint8_t trigger_mode = 0;  ///< Backend-defined effect mode.
   };
@@ -80,6 +84,18 @@ namespace apollo::input {
      * @return True when the backend accepted the report.
      */
     virtual bool update(const GamepadState &state) = 0;
+
+    /**
+     * @brief Configure analog drift filtering for this device.
+     *
+     * Backends that forward analog axes apply the deadzone before submitting
+     * the report. Devices that do not support analog filtering ignore it.
+     *
+     * @param deadzone Stick and trigger deadzone configuration.
+     */
+    virtual void set_deadzone(const AnalogDeadzone &deadzone) {
+      (void) deadzone;
+    }
 
     /**
      * @brief Submit a touchpad report when the backend supports it.
@@ -151,6 +167,21 @@ namespace apollo::input {
     virtual std::unique_ptr<Device> create(Profile profile, const std::string &name, std::string *error = nullptr) = 0;
 
     /**
+     * @brief Create a device, falling back to a simpler compatible profile.
+     *
+     * The requested profile is tried first. When the backend cannot create it,
+     * progressively simpler profiles from @ref profile_compatibility_chain()
+     * are tried. The created device reports the profile it actually emulates in
+     * @ref DeviceInfo::profile.
+     *
+     * @param profile Preferred controller profile.
+     * @param name Name shown by the operating system.
+     * @param error Optional human-readable reason when every profile fails.
+     * @return Device, or null when no compatible profile is available.
+     */
+    std::unique_ptr<Device> create_compatible(Profile profile, const std::string &name, std::string *error = nullptr);
+
+    /**
      * @brief Profiles supported by this backend.
      *
      * @return Supported profile list.
@@ -175,7 +206,10 @@ namespace apollo::input {
   const char *to_string(BackendKind kind);
 
   /**
-   * @brief Parse a backend kind from its short name.
+   * @brief Parse a backend kind from its short name or a compatible alias.
+   *
+   * Matching is case-insensitive. Aliases include "auto", "vigembus",
+   * "linux_uinput", and "none".
    *
    * @param name Backend name.
    * @param kind Receives the parsed kind.

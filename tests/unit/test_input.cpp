@@ -375,6 +375,65 @@ TEST_F(InputGamepadSessionTest, SerializesArrivalAndStatePacketsForOneController
   EXPECT_EQ(adapter->gamepad()->profile().gamepad_kind, lvh::GamepadProfileKind::switch_pro);
 }
 
+TEST_F(InputGamepadSessionTest, SanitizesStickDriftAndTriggerNoiseBeforeBackend) {
+  config::input.gamepad = "xseries";
+  config::input.gamepad_stick_deadzone = 5;
+  config::input.gamepad_trigger_deadzone = 2;
+
+  auto stream_input = input::alloc(std::make_shared<safe::mail_raw_t>(), "precision-input");
+  ASSERT_NE(stream_input, nullptr);
+
+  const platf::gamepad_arrival_t metadata {LI_CTYPE_XBOX, 0, 0};
+  const auto id = input::testing::alloc_gamepad(stream_input, 0, metadata);
+  ASSERT_GE(id, 0);
+
+  auto *adapter = platf::virtualhid::gamepad_adapter_for_testing(context(), id);
+  ASSERT_NE(adapter, nullptr);
+
+  auto send_state = [&](std::int16_t left_x, std::int16_t left_y, std::int16_t right_x, std::int16_t right_y, std::uint8_t left_trigger, std::uint8_t right_trigger, std::uint32_t buttons) {
+    NV_MULTI_CONTROLLER_PACKET packet {};
+    packet.header.size = util::endian::big<std::uint32_t>(sizeof(packet) - sizeof(packet.header.size));
+    packet.header.magic = util::endian::little(MULTI_CONTROLLER_MAGIC_GEN5);
+    packet.controllerNumber = 0;
+    packet.activeGamepadMask = 1;
+    packet.buttonFlags = static_cast<short>(buttons & 0xFFFF);
+    packet.buttonFlags2 = static_cast<short>((buttons >> 16) & 0xFFFF);
+    packet.leftTrigger = left_trigger;
+    packet.rightTrigger = right_trigger;
+    packet.leftStickX = left_x;
+    packet.leftStickY = left_y;
+    packet.rightStickX = right_x;
+    packet.rightStickY = right_y;
+
+    std::vector<std::uint8_t> bytes(sizeof(packet));
+    std::memcpy(bytes.data(), &packet, sizeof(packet));
+    input::passthrough(stream_input, std::move(bytes), TEST_INPUT_PERMISSIONS);
+    input::testing::process_queued_messages(stream_input);
+  };
+
+  send_state(900, -1200, -800, 700, 4, 5, 0);
+  EXPECT_FLOAT_EQ(adapter->state().left_stick.x, 0.0F);
+  EXPECT_FLOAT_EQ(adapter->state().left_stick.y, 0.0F);
+  EXPECT_FLOAT_EQ(adapter->state().right_stick.x, 0.0F);
+  EXPECT_FLOAT_EQ(adapter->state().right_stick.y, 0.0F);
+  EXPECT_FLOAT_EQ(adapter->state().left_trigger, 0.0F);
+  EXPECT_FLOAT_EQ(adapter->state().right_trigger, 0.0F);
+
+  send_state(32767, 0, -32768, 0, 255, 254, 0);
+  EXPECT_NEAR(adapter->state().left_stick.x, 1.0F, 0.001F);
+  EXPECT_NEAR(adapter->state().left_stick.y, 0.0F, 0.001F);
+  EXPECT_NEAR(adapter->state().right_stick.x, -1.0F, 0.001F);
+  EXPECT_NEAR(adapter->state().right_stick.y, 0.0F, 0.001F);
+  EXPECT_NEAR(adapter->state().left_trigger, 1.0F, 0.001F);
+  EXPECT_NEAR(adapter->state().right_trigger, 1.0F, 0.01F);
+
+  send_state(0, 0, 0, 0, 0, 0, platf::A | platf::DPAD_UP | platf::LEFT_BUTTON | platf::MISC_BUTTON);
+  EXPECT_TRUE(adapter->state().buttons.test(lvh::GamepadButton::a));
+  EXPECT_TRUE(adapter->state().buttons.test(lvh::GamepadButton::dpad_up));
+  EXPECT_TRUE(adapter->state().buttons.test(lvh::GamepadButton::left_shoulder));
+  EXPECT_TRUE(adapter->state().buttons.test(lvh::GamepadButton::misc1));
+}
+
 TEST_F(InputGamepadSessionTest, YieldsAfterBoundedPacketBatch) {
   ASSERT_FALSE(task_pool.running());
   auto stream_input = input::alloc(std::make_shared<safe::mail_raw_t>(), "bounded-input-batch");

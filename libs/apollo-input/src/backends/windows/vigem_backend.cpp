@@ -61,6 +61,20 @@ namespace apollo::input::detail {
     }
 
     /**
+     * @brief Scale factor from radians per second to DS4 gyro units.
+     *
+     * DS4 reports 16 units per degree per second.
+     */
+    constexpr float DS4_GYRO_SCALE = 16.0F * 57.2957795F;
+
+    /**
+     * @brief Scale factor from meters per second squared to DS4 accelerometer units.
+     *
+     * DS4 reports 8192 units at one standard gravity.
+     */
+    constexpr float DS4_ACCEL_SCALE = 8192.0F / 9.80665F;
+
+    /**
      * @brief Build the DS4 D-pad direction from the button mask.
      *
      * @param state Gamepad state.
@@ -133,14 +147,22 @@ namespace apollo::input::detail {
           return false;
         }
 
+        auto sanitized = state;
+        sanitize_gamepad_state(sanitized, deadzone_);
+
         if (info_.profile == Profile::xbox_360) {
-          return send_x360(state);
+          return send_x360(sanitized);
         }
         if (info_.profile == Profile::dualshock4) {
-          update_ds4_state(state);
+          update_ds4_state(sanitized);
           return send_ds4();
         }
         return false;
+      }
+
+      void set_deadzone(const AnalogDeadzone &deadzone) override {
+        std::scoped_lock lock(mutex_);
+        deadzone_ = deadzone;
       }
 
       bool update_touchpad(const TouchpadState &state) override {
@@ -168,12 +190,12 @@ namespace apollo::input::detail {
         }
 
         auto &report = ds4_report_.Report;
-        report.wGyroX = ds4_sensor(sample.gyro_x, 1000.0F);
-        report.wGyroY = ds4_sensor(sample.gyro_y, 1000.0F);
-        report.wGyroZ = ds4_sensor(sample.gyro_z, 1000.0F);
-        report.wAccelX = ds4_sensor(sample.accel_x, 1000.0F);
-        report.wAccelY = ds4_sensor(sample.accel_y, 1000.0F);
-        report.wAccelZ = ds4_sensor(sample.accel_z, 1000.0F);
+        report.wGyroX = ds4_sensor(sample.gyro_x, DS4_GYRO_SCALE);
+        report.wGyroY = ds4_sensor(sample.gyro_y, DS4_GYRO_SCALE);
+        report.wGyroZ = ds4_sensor(sample.gyro_z, DS4_GYRO_SCALE);
+        report.wAccelX = ds4_sensor(sample.accel_x, DS4_ACCEL_SCALE);
+        report.wAccelY = ds4_sensor(sample.accel_y, DS4_ACCEL_SCALE);
+        report.wAccelZ = ds4_sensor(sample.accel_z, DS4_ACCEL_SCALE);
         return send_ds4();
       }
 
@@ -216,12 +238,21 @@ namespace apollo::input::detail {
        * @return Capability flags.
        */
       static Capabilities capabilities_for(Profile profile) {
-        Capabilities capabilities;
-        capabilities.rumble = true;
-        if (profile == Profile::dualshock4) {
-          capabilities.leds = true;
-          capabilities.imu = true;
-          capabilities.touchpad = true;
+        auto capabilities = profile_capabilities(profile);
+
+        // ViGEmBus only provides the features implemented by its X360 and DS4
+        // reports. Callers should use create_compatible() for other profiles.
+        capabilities.trigger_rumble = false;
+        capabilities.player_leds = false;
+        capabilities.battery = false;
+        capabilities.paddles = false;
+        capabilities.misc_buttons = 0;
+        capabilities.adaptive_triggers = false;
+
+        if (profile != Profile::dualshock4) {
+          capabilities.leds = false;
+          capabilities.imu = false;
+          capabilities.touchpad = false;
         }
         return capabilities;
       }
@@ -260,10 +291,10 @@ namespace apollo::input::detail {
         if (state.pressed(Button::dpad_right)) {
           report.wButtons |= XUSB_GAMEPAD_DPAD_RIGHT;
         }
-        if (state.pressed(Button::start)) {
+        if (state.pressed(Button::start) || state.pressed(Button::options)) {
           report.wButtons |= XUSB_GAMEPAD_START;
         }
-        if (state.pressed(Button::back)) {
+        if (state.pressed(Button::back) || state.pressed(Button::share) || state.pressed(Button::misc2)) {
           report.wButtons |= XUSB_GAMEPAD_BACK;
         }
         if (state.pressed(Button::guide)) {
@@ -337,10 +368,10 @@ namespace apollo::input::detail {
         if (state.pressed(Button::right_thumb)) {
           report.wButtons |= DS4_BUTTON_THUMB_RIGHT;
         }
-        if (state.pressed(Button::back)) {
+        if (state.pressed(Button::back) || state.pressed(Button::share)) {
           report.wButtons |= DS4_BUTTON_SHARE;
         }
-        if (state.pressed(Button::start)) {
+        if (state.pressed(Button::start) || state.pressed(Button::options)) {
           report.wButtons |= DS4_BUTTON_OPTIONS;
         }
 
@@ -419,6 +450,7 @@ namespace apollo::input::detail {
       DeviceInfo info_;
       DS4_REPORT_EX ds4_report_ {};
       std::uint8_t touch_packet_ = 0;
+      AnalogDeadzone deadzone_;
       FeedbackCallback feedback_;
       std::mutex mutex_;
       std::atomic<bool> connected_ {true};
@@ -462,7 +494,7 @@ namespace apollo::input::detail {
       std::unique_ptr<Device> create(Profile profile, const std::string &name, std::string *error) override {
         if (profile != Profile::xbox_360 && profile != Profile::dualshock4) {
           if (error) {
-            *error = "ViGEmBus only supports Xbox 360 and DualShock 4 profiles in this library";
+            *error = "ViGEmBus only supports Xbox 360 and DualShock 4 profiles; use create_compatible() to fall back";
           }
           return nullptr;
         }

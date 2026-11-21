@@ -31,21 +31,8 @@
       </fieldset>
     </div>
 
-    <!-- Loading State -->
-    <div v-if="loading" class="text-center py-5">
-      <output class="spinner-border">
-        <span class="visually-hidden">{{ $t('_common.loading') }}</span>
-      </output>
-    </div>
-
-    <!-- Error State -->
-    <div v-else-if="error" class="alert alert-danger" role="alert">
-      <h4 class="alert-heading">{{ $t('_common.error') }}</h4>
-      <p>{{ error }}</p>
-    </div>
-
     <!-- Apps Grid -->
-    <div v-else class="row g-4">
+    <div class="row g-4">
       <div
         v-for="app in filteredApps"
         :key="app.id"
@@ -55,11 +42,11 @@
             <div class="d-flex align-items-start mb-3">
               <div class="featured-app-icon me-3">
                 <img
-                  v-if="app.icon"
-                  :src="app.icon + '?size=64'"
+                  v-if="app.icon && !failedIcons[app.id]"
+                  :src="featuredIconUrl(app.icon)"
                   :alt="app.name"
                   class="rounded"
-                  @error="handleIconError($event)"
+                  @error="handleIconError(app.id)"
                 />
                 <div v-else class="featured-app-icon-placeholder">
                   <box :size="32" class="icon"></box>
@@ -75,7 +62,9 @@
             <p class="card-text text-muted small mb-3">{{ app.description }}</p>
 
             <!-- GitHub Metadata -->
-            <div v-if="app.github" class="github-stats mb-3 d-flex gap-3 text-muted small">
+            <div
+              v-if="app.github && (app.github.stars !== undefined || app.github.forks !== undefined || app.github.openIssues !== undefined)"
+              class="github-stats mb-3 d-flex gap-3 text-muted small">
               <span v-if="app.github.stars !== undefined" :title="$t('featured.github_stars')">
                 <star :size="14" class="icon" fill="currentColor"></star>
                 {{ formatNumber(app.github.stars) }}
@@ -203,7 +192,7 @@
     </div>
 
     <!-- Empty State -->
-    <div v-if="!loading && !error && filteredApps.length === 0" class="text-center py-5">
+    <div v-if="filteredApps.length === 0" class="text-center py-5">
       <p class="text-muted">{{ $t('featured.no_apps') }}</p>
     </div>
 
@@ -255,6 +244,7 @@
 
 <script>
   import SimpleIcon from './SimpleIcon.vue'
+  import { FEATURED_APPS, FEATURED_CATEGORIES } from './featured-apps.js'
   import { formatDistanceToNow, format } from 'date-fns'
   import {
     ArrowDownCircle,
@@ -293,11 +283,10 @@
     },
     data() {
       return {
-        apps: [],
-        categories: [],
+        apps: FEATURED_APPS,
+        categories: FEATURED_CATEGORIES,
         selectedCategory: null,
-        loading: true,
-        error: null,
+        failedIcons: {},
         selectedScreenshot: null,
         selectedScreenshotIndex: -1,
         currentAppScreenshots: [],
@@ -324,9 +313,6 @@
         });
       }
     },
-    created() {
-      this.loadFeaturedApps();
-    },
     mounted() {
       window.addEventListener('keydown', this.handleKeydown);
     },
@@ -334,28 +320,15 @@
       window.removeEventListener('keydown', this.handleKeydown);
     },
     methods: {
-      async loadFeaturedApps() {
-        try {
-          this.loading = true;
-          this.error = null;
-
-          // Fetch the app directory for Sunshine
-          const indexUrl = 'https://app.lizardbyte.dev/app-directory/sunshine.json';
-
-          const response = await fetch(indexUrl);
-          if (!response.ok) {
-            throw new Error('Failed to load featured apps');
-          }
-
-          const data = await response.json();
-          this.apps = data.apps || [];
-          this.categories = data.categories || [];
-        } catch (err) {
-          console.error('Error loading featured apps:', err);
-          this.error = err.message;
-        } finally {
-          this.loading = false;
-        }
+      featuredIconUrl(icon) {
+        if (!icon) return '';
+        // Remote GitHub avatars accept a size hint; local assets already have
+        // their final dimensions and need no query string.
+        if (!/^https?:\/\//i.test(icon)) return icon;
+        return `${icon}${icon.includes('?') ? '&' : '?'}size=64`;
+      },
+      handleIconError(appId) {
+        this.failedIcons = { ...this.failedIcons, [appId]: true };
       },
       platformName(platform) {
         const names = {
@@ -370,10 +343,6 @@
           'windows': 'Windows',
         };
         return names[platform] || platform;
-      },
-      handleIconError(event) {
-        // Hide broken icon and show placeholder
-        event.target.style.display = 'none';
       },
       openScreenshot(url, screenshots) {
         this.currentAppScreenshots = screenshots || [];

@@ -555,6 +555,11 @@ consent prompt for directory ACLs, so the Web UI shows setup steps for correctin
     </tr>
 </table>
 
+@note{Apollo HID (`gamepad_driver = apollohid`) is **not a host-selectable value
+yet**. The native UMDF2 + VHF backend is implemented and available through
+ApolloInput Nova; host integration and fallback are tracked in
+`apollo HID/docs/RELEASE-READINESS.md`.}
+
 ### gamepad
 
 <table>
@@ -607,6 +612,65 @@ consent prompt for directory ACLs, so the Web UI shows setup steps for correctin
     <tr>
         <td>xseries</td>
         <td>Xbox Series controller</td>
+    </tr>
+</table>
+
+### gamepad_stick_deadzone
+
+<table>
+    <tr>
+        <td>Description</td>
+        <td colspan="2">
+            Radial deadzone percentage applied to both analog sticks before they are sent to the
+            virtual gamepad. It removes small client or controller drift without changing normal
+            movement. Values outside the deadzone are rescaled so full travel still reaches the
+            endpoints. Set to 0 to disable host-side filtering.
+        </td>
+    </tr>
+    <tr>
+        <td>Default</td>
+        <td colspan="2">@code{}
+            3
+            @endcode</td>
+    </tr>
+    <tr>
+        <td>Example</td>
+        <td colspan="2">@code{}
+            gamepad_stick_deadzone = 5
+            @endcode</td>
+    </tr>
+    <tr>
+        <td>Range</td>
+        <td colspan="2">0 to 30</td>
+    </tr>
+</table>
+
+### gamepad_trigger_deadzone
+
+<table>
+    <tr>
+        <td>Description</td>
+        <td colspan="2">
+            Deadzone percentage applied to analog triggers. Values below the threshold are treated
+            as fully released, and higher values are rescaled to preserve the full trigger range.
+            Useful when a resting trigger reports a small non-zero value.
+        </td>
+    </tr>
+    <tr>
+        <td>Default</td>
+        <td colspan="2">@code{}
+            2
+            @endcode</td>
+    </tr>
+    <tr>
+        <td>Example</td>
+        <td colspan="2">@code{}
+            gamepad_trigger_deadzone = 4
+            @endcode</td>
+    </tr>
+    <tr>
+        <td>Range</td>
+        <td colspan="2">0 to 30</td>
     </tr>
 </table>
 

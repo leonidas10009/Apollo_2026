@@ -25,6 +25,8 @@
       "forward_rumble": "enabled",
       "gamepad_driver": "",
       "gamepad": "auto",
+      "gamepad_stick_deadzone": 3,
+      "gamepad_trigger_deadzone": 2,
       "ds4_back_as_touchpad_click": "enabled",
       "motion_as_ds4": "enabled",
       "touchpad_as_ds4": "enabled",

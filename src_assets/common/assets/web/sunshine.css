@@ -2092,6 +2092,69 @@ p {
     border-radius: var(--radius-lg);
 }
 
+.apollo-input-status {
+    padding: var(--spacing-md);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background-color: var(--color-bg-subtle);
+}
+
+.apollo-input-status-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: var(--spacing-sm);
+}
+
+.apollo-input-status-title {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    margin-bottom: var(--spacing-xs);
+    font-size: 0.9375rem;
+    font-weight: 700;
+    color: var(--color-text-base);
+}
+
+.apollo-input-status-title .icon {
+    color: var(--color-primary);
+    flex-shrink: 0;
+}
+
+.apollo-input-status-desc {
+    max-width: 60rem;
+    font-size: 0.8125rem;
+    line-height: 1.45;
+    color: var(--color-text-muted);
+}
+
+.apollo-input-status-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: var(--spacing-md);
+    margin-top: var(--spacing-md);
+}
+
+.apollo-input-status-profiles {
+    grid-column: 1 / -1;
+}
+
+.apollo-input-status-label {
+    margin-bottom: 0.2rem;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--color-text-subtle);
+}
+
+.apollo-input-status-value {
+    font-size: 0.875rem;
+    line-height: 1.4;
+    color: var(--color-text-base);
+}
+
 @media (max-width: 768px) {
     .config-layout {
         flex-direction: column;
@@ -2662,15 +2725,37 @@ p {
     aspect-ratio: 3 / 4;
     overflow: hidden;
     background: var(--color-bg-muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    isolation: isolate;
+}
+
+.app-poster-backdrop {
+    position: absolute;
+    inset: -10%;
+    width: 120%;
+    height: 120%;
+    object-fit: cover;
+    filter: blur(22px) brightness(0.42) saturate(1.15);
+    transform: scale(1.04);
+    opacity: 0.75;
+    pointer-events: none;
+    user-select: none;
 }
 
 .app-poster {
+    position: relative;
+    z-index: 1;
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    object-fit: contain;
+    filter: drop-shadow(0 12px 24px rgba(0, 0, 0, 0.38));
 }
 
 .app-poster-placeholder {
+    position: relative;
+    z-index: 1;
     width: 100%;
     height: 100%;
     display: flex;
@@ -2692,6 +2777,7 @@ p {
 
 .app-poster-overlay {
     position: absolute;
+    z-index: 2;
     inset: 0;
     display: flex;
     flex-direction: column;
@@ -2872,15 +2958,16 @@ p {
 }
 
 .screenshot-thumbnail {
-    height: 120px;
+    height: 200px;
     width: auto;
-    max-width: 200px;
-    min-width: 100px;
+    max-width: 320px;
+    min-width: 0;
     border-radius: var(--radius-sm);
     cursor: pointer;
     transition: transform var(--transition-base), box-shadow var(--transition-base);
     flex-shrink: 0;
-    object-fit: cover;
+    object-fit: contain;
+    background: var(--color-bg-muted);
     border: 1px solid var(--color-border);
 }
 

@@ -335,6 +335,9 @@ namespace config {
 
     bool enable_input_only_mode;  ///< Apollo: start sessions without a video stream and allow an app to request one.
     bool forward_rumble;  ///< Apollo: forward rumble events to the client controller.
+
+    int gamepad_stick_deadzone;  ///< Radial deadzone percentage applied to analog sticks.
+    int gamepad_trigger_deadzone;  ///< Deadzone percentage applied to analog triggers.
   };
 
   namespace flag {

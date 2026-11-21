@@ -180,6 +180,10 @@ namespace platf::virtualhid {
           return playstation;
         case LI_CTYPE_NINTENDO:
           return nintendo;
+        case LI_CTYPE_STEAM:
+          // libvirtualhid has no Steam Controller client type yet. The profile
+          // is still selected explicitly in profile_for_metadata().
+          return unknown;
         case LI_CTYPE_UNKNOWN:
         default:
           return unknown;
@@ -210,6 +214,10 @@ namespace platf::virtualhid {
       if (metadata.type == LI_CTYPE_XBOX) {
         BOOST_LOG(info) << "Gamepad will be Xbox Series controller (auto-selected by client-reported type)"sv;
         return profile_for_name("xseries"sv);
+      }
+      if (metadata.type == LI_CTYPE_STEAM) {
+        BOOST_LOG(info) << "Gamepad will be DualSense controller (auto-selected by Steam Controller type)"sv;
+        return profile_for_name("ds5"sv);
       }
       if (config::input.motion_as_ds4 && (metadata.capabilities & (LI_CCAP_ACCEL | LI_CCAP_GYRO))) {
         BOOST_LOG(info) << "Gamepad will be DualSense controller (auto-selected by motion sensor presence)"sv;
@@ -253,7 +261,7 @@ namespace platf::virtualhid {
       result.client_relative_index = id.clientRelativeIndex;
       result.client_type = client_controller_type(metadata.type);
       result.has_motion_sensors = metadata.capabilities & (LI_CCAP_ACCEL | LI_CCAP_GYRO);
-      result.has_touchpad = metadata.capabilities & LI_CCAP_TOUCHPAD;
+      result.has_touchpad = (metadata.capabilities & LI_CCAP_TOUCHPAD) || (metadata.supportedButtons & TOUCHPAD_BUTTON);
       result.has_rgb_led = metadata.capabilities & LI_CCAP_RGB_LED;
       result.has_battery = metadata.capabilities & LI_CCAP_BATTERY_STATE;
       result.stable_id = gamepad_stable_id(id, profile);
@@ -269,6 +277,12 @@ namespace platf::virtualhid {
       }
       if ((metadata.capabilities & LI_CCAP_RGB_LED) && !support.supports_rgb_led) {
         BOOST_LOG(warning) << "Gamepad "sv << global_index << " has an RGB LED, but the selected virtual profile cannot expose it"sv;
+      }
+      if ((metadata.supportedButtons & (PADDLE1 | PADDLE2 | PADDLE3 | PADDLE4)) && support.supported_rear_paddle_count == 0) {
+        BOOST_LOG(warning) << "Gamepad "sv << global_index << " has rear paddles, but the selected virtual profile cannot expose them"sv;
+      }
+      if ((metadata.capabilities & LI_CCAP_DUAL_TOUCHPAD) && support.supports_touchpad) {
+        BOOST_LOG(warning) << "Gamepad "sv << global_index << " has two touchpads; only one can be exposed by the selected virtual profile"sv;
       }
     }
 
@@ -304,6 +318,10 @@ namespace platf::virtualhid {
       result.buttons.set(y, flags & Y);
       result.buttons.set(misc1, support.supports_misc1_button && (flags & MISC_BUTTON));
       result.buttons.set(touchpad, support.supports_touchpad_button && (flags & TOUCHPAD_BUTTON));
+      result.buttons.set(paddle1, support.supported_rear_paddle_count >= 1 && (flags & PADDLE1));
+      result.buttons.set(paddle2, support.supported_rear_paddle_count >= 2 && (flags & PADDLE2));
+      result.buttons.set(paddle3, support.supported_rear_paddle_count >= 3 && (flags & PADDLE3));
+      result.buttons.set(paddle4, support.supported_rear_paddle_count >= 4 && (flags & PADDLE4));
 
       if (support.supports_touchpad_button && config::input.ds4_back_as_touchpad_click && configured_gamepad_supports_touchpad() && (flags & BACK)) {
         result.buttons.set(touchpad);

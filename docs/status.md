@@ -1,6 +1,6 @@
 # Apollo 2026 — current status
 
-> Last updated: **2026-11-20**.
+> Last updated: **2026-11-21**.
 > This document describes the current application state, what was verified, and what
 > remains open. It is not a changelog; see [changelog.md](changelog.md) for releases.
 
@@ -33,8 +33,10 @@ The portable package and installer include `LICENSE`, `NOTICE`, `CREDITS.md`,
 | Area | Result |
 |---|---|
 | Native build | Windows 11 / MSYS2 UCRT64 / GCC 16.2 / Ninja / Release |
-| C++ tests | **943 tests / 930 pass / 13 skipped / 0 failed** (last recorded run) |
-| Web tests | **17 files / 248 tests pass** (last recorded run) |
+| C++ tests | **946 tests / 933 pass / 13 skipped / 0 failed** (last recorded run) |
+| Web tests | **18 files / 258 tests pass** (last recorded run) |
+| Web build | `npm run build` completes; Vite output generated |
+| `apollo-input` tests | **2/2 pass** (`apollo-input-core`, `apollo-input-vigem-xinput`) |
 | npm audit | **0 vulnerabilities** |
 | Conflict markers | None |
 | Locale JSON | All parse |
@@ -67,6 +69,12 @@ Virtual HID Broker without a license).
 - Gamepad backends:
   - Virtual HID Broker (libvirtualhid) with license management.
   - ViGEmBus fallback for Xbox 360/DS4.
+- Gamepad precision: configurable stick/trigger deadzones, radial filtering,
+  center snap, resume neutralization and Steam Controller detection.
+- Application posters scaled without cropping (contained image plus blurred
+  backdrop) and a curated Featured Apps page with Artemis 2026.
+- Input tab status panel for ApolloInput Nova, including the active host
+  backend, precision values and Virtual HID Broker profile requirements.
 - Virtual-input status/license UI and release/download links.
 - Quit/restart, logs, permissions, troubleshooting.
 - Windows installer with SudoVDA auto-install and firewall setup.
@@ -85,7 +93,8 @@ Virtual HID Broker without a license).
 - BSD-3-Clause, EOL (1.22.0, 2023) but signed and working.
 - Installed as the free fallback for Xbox 360 and DualShock 4.
 - The new `libs/apollo-input` library tests it end-to-end: create virtual pad,
-  read through XInput, press A, move stick, release.
+  read through XInput, press A, move stick, release, and DualSense → DualShock 4
+  fallback.
 - Does not support Xbox One/Series, DualSense, Switch Pro or adaptive triggers.
 
 ### Virtual HID Broker (libvirtualhid)
@@ -99,12 +108,31 @@ Virtual HID Broker without a license).
 
 ### `libs/apollo-input`
 
-A standalone MIT library with a portable gamepad model and ViGEmBus/uinput/null
-backends. It is not yet wired into Apollo's main build. See
-[apollo-input.md](apollo-input.md).
+ApolloInput Nova **0.3.0**, a standalone MIT library with a portable gamepad
+model, profiles, compatibility fallback, anti-drift and Apollo HID/ViGEmBus/
+uinput/null backends. The vendored copy in `libs/apollo-input` builds and passes
+its two tests. The Apollo HID backend uses the native UMDF2 + VHF driver,
+supports all built-in profiles (advanced ones use compatibility HID descriptors),
+and creates one client handle per virtual device. See
+[apollo-input.md](apollo-input.md) and the controller compatibility study in
+[controller-compatibility.md](controller-compatibility.md).
+
+The Apollo streaming host has the 0.2.0 precision patch applied:
+
+- `gamepad_stick_deadzone` and `gamepad_trigger_deadzone`;
+- radial stick filtering and exact center snap;
+- trigger resting-noise filtering;
+- neutral gamepad state when a paused session resumes;
+- `LI_CTYPE_STEAM` handling and paddle mapping preparation.
+
+The library is still **not linked into Apollo's main build**. Virtual pads
+continue to be created by `src/platform/windows/input.cpp` and `libvirtualhid`;
+linking `apollo::input` into the host is a separate refactor. Apollo HID is
+therefore not a `gamepad_driver` value yet. The remaining work is tracked in
+`apollo HID/docs/RELEASE-READINESS.md`.
 
 > The library was added to `main` after the `v1.0.0` tag; it is not part of the
-> 1.0.0 or 1.0.1 installers. A future release can integrate it into the host build.
+> 1.0.0 or 1.0.1 installers. The integration is currently unreleased.
 
 ## Known limitations and open work
 
@@ -116,7 +144,8 @@ backends. It is not yet wired into Apollo's main build. See
 | Medium | Virtual HID Broker license | Needed for DualSense/Switch Pro/adaptive triggers/IMU on Windows |
 | Medium | Code signing | `.exe` and installer are unsigned |
 | Medium | End-to-end power actions from Artemis | Test `/servercmd` with a paired device and `server_cmd`; verify shutdown, restart and cancel |
-| Medium | Integrate `apollo-input` into Apollo | Optional; current host input still uses `src/platform/windows/input.cpp` |
+| Medium | Link `apollo-input` into the host build | Library 0.3.0 is vendored and tested, including the Apollo HID backend; the host still uses `src/platform/windows/input.cpp` and `libvirtualhid` |
+| Medium | Apollo HID host integration | Add `gamepad_driver = apollohid`, per-profile selection and fallback; see `apollo HID/docs/RELEASE-READINESS.md` |
 | Medium | Native CI + release automation | Current CI covers Web UI, Pester and structure only |
 | Low | macOS `vt_software` | Not tested on macOS hardware |
 | Low | UHID backend / SDL3 test backend | Planned in `apollo-input` |
@@ -133,7 +162,9 @@ backends. It is not yet wired into Apollo's main build. See
 7. Close the session and check that the virtual display/processes are removed.
 8. For gamepads:
    - ViGEmBus fallback: select the ViGEmBus backend in **Configuration → Input**;
-   - or activate a Virtual HID Broker license in **Troubleshooting**.
+   - or activate a Virtual HID Broker license in **Troubleshooting**;
+   - tune `gamepad_stick_deadzone` and `gamepad_trigger_deadzone` if a physical
+     controller drifts at rest.
 
 ## Documentation
 
@@ -143,4 +174,5 @@ backends. It is not yet wired into Apollo's main build. See
 - [API](api.md)
 - [Building](building.md)
 - [apollo-input](apollo-input.md)
+- [Controller compatibility](controller-compatibility.md)
 - [Changelog](changelog.md)

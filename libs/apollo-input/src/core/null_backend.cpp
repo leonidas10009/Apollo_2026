@@ -14,7 +14,7 @@ namespace apollo::input::detail {
     class NullDevice final: public Device {
     public:
       NullDevice(Profile profile, std::string name):
-          info_ {profile, {}, std::move(name)} {
+          info_ {profile, profile_capabilities(profile), std::move(name)} {
       }
 
       const DeviceInfo &info() const override {
@@ -26,8 +26,30 @@ namespace apollo::input::detail {
       }
 
       bool update(const GamepadState &state) override {
-        state_ = state;
+        auto sanitized = state;
+        sanitize_gamepad_state(sanitized, deadzone_);
+        state_ = sanitized;
         return connected_;
+      }
+
+      void set_deadzone(const AnalogDeadzone &deadzone) override {
+        deadzone_ = deadzone;
+      }
+
+      bool update_touchpad(const TouchpadState &state) override {
+        if (!connected_ || !info_.capabilities.touchpad) {
+          return false;
+        }
+        touchpad_ = state;
+        return true;
+      }
+
+      bool update_imu(const ImuSample &sample) override {
+        if (!connected_ || !info_.capabilities.imu) {
+          return false;
+        }
+        imu_ = sample;
+        return true;
       }
 
       void disconnect() override {
@@ -36,7 +58,10 @@ namespace apollo::input::detail {
 
     private:
       DeviceInfo info_;
+      AnalogDeadzone deadzone_;
       GamepadState state_ {};
+      TouchpadState touchpad_ {};
+      ImuSample imu_ {};
       bool connected_ = true;
     };
 
@@ -65,9 +90,13 @@ namespace apollo::input::detail {
           Profile::xbox_360,
           Profile::xbox_one,
           Profile::xbox_series,
+          Profile::xbox_elite,
           Profile::dualshock4,
           Profile::dualsense,
+          Profile::dualsense_edge,
           Profile::switch_pro,
+          Profile::steam_controller,
+          Profile::steam_deck,
           Profile::generic,
         };
       }

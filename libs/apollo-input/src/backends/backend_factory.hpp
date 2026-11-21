@@ -23,6 +23,15 @@ namespace apollo::input::detail {
   std::unique_ptr<Backend> create_vigem_backend();
 #endif
 
+#if defined(_WIN32) && defined(APOLLO_INPUT_WITH_APOLLO_HID)
+  /**
+   * @brief Create the Apollo HID backend.
+   *
+   * @return Apollo HID backend instance.
+   */
+  std::unique_ptr<Backend> create_apollo_hid_backend();
+#endif
+
 #if defined(__linux__)
   /**
    * @brief Create the Linux uinput backend.

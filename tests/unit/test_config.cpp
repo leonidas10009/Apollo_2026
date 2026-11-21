@@ -208,6 +208,20 @@ TEST_F(ConfigPersistenceTest, AcceptsAllGamepadProfilesAcrossRepeatedConfigurati
   }
 }
 
+TEST_F(ConfigPersistenceTest, ParsesGamepadDeadzoneOptions) {
+  const auto apps_file = config_file().parent_path() / "sunshine_test_config_apps.json";
+  ASSERT_EQ(file_handler::write_file(apps_file.string().c_str(), "{}"), 0);
+  config::stream.file_apps = apps_file.string();
+
+  config::apply_config_for_test("gamepad_stick_deadzone = 7\ngamepad_trigger_deadzone = 4\n");
+  EXPECT_EQ(config::input.gamepad_stick_deadzone, 7);
+  EXPECT_EQ(config::input.gamepad_trigger_deadzone, 4);
+
+  config::apply_config_for_test("gamepad_stick_deadzone = 99\ngamepad_trigger_deadzone = -1\n");
+  EXPECT_EQ(config::input.gamepad_stick_deadzone, 7);
+  EXPECT_EQ(config::input.gamepad_trigger_deadzone, 4);
+}
+
 TEST_F(ConfigPersistenceTest, ParsesFp16SdrGammaEncodedOption) {
   const auto apps_file = config_file().parent_path() / "sunshine_test_config_apps.json";
   ASSERT_EQ(file_handler::write_file(apps_file.string().c_str(), "{}"), 0);

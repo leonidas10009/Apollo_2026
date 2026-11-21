@@ -21,8 +21,11 @@ namespace {
   void usage(const char *program) {
     std::printf(
       "Usage: %s [options]\n"
-      "  --backend <auto|vigem|uinput|null>  Backend to use (default: auto)\n"
-      "  --profile <xbox_360|dualshock4|generic> Controller profile\n"
+      "  --backend <auto|vigem|apollo_hid|uinput|null>  Backend to use (default: auto)\n"
+      "  --profile <name>                    Controller profile (default: xbox_360)\n"
+      "                                      Aliases: x360, xone, xseries, xbox_elite, ds4, ds5,\n"
+      "                                      ds5_edge, switch, steam, steam_deck, generic\n"
+      "  --compatible                        Fall back to a simpler profile when needed\n"
       "  --seconds <n>                       How long to animate (default: 8)\n"
       "  --name <text>                       Device name\n"
       "  --help                              Show this help\n",
@@ -59,6 +62,7 @@ int main(int argc, char **argv) {
   apollo::input::Profile profile = apollo::input::Profile::xbox_360;
   std::string device_name = "Apollo Virtual Gamepad";
   int seconds = 8;
+  bool compatible = false;
 
   for (int index = 1; index < argc; ++index) {
     if (std::strcmp(argv[index], "--help") == 0) {
@@ -77,6 +81,10 @@ int main(int argc, char **argv) {
         std::fprintf(stderr, "Unknown profile: %s\n", argv[index]);
         return 2;
       }
+      continue;
+    }
+    if (std::strcmp(argv[index], "--compatible") == 0) {
+      compatible = true;
       continue;
     }
     if (std::strcmp(argv[index], "--seconds") == 0 && index + 1 < argc) {
@@ -109,7 +117,7 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  auto device = backend->create(profile, device_name, &error);
+  auto device = compatible ? backend->create_compatible(profile, device_name, &error) : backend->create(profile, device_name, &error);
   if (!device) {
     std::fprintf(stderr, "Unable to create a device: %s\n", error.c_str());
     return 1;
@@ -119,11 +127,17 @@ int main(int argc, char **argv) {
   std::printf("Backend: %s\n", backend->name());
   std::printf("Profile: %s\n", apollo::input::to_string(info.profile));
   std::printf("Name: %s\n", info.name.c_str());
-  std::printf("Capabilities: rumble=%d leds=%d imu=%d touchpad=%d\n",
+  std::printf("Capabilities: rumble=%d trigger_rumble=%d leds=%d player_leds=%d imu=%d touchpad=%d adaptive=%d battery=%d paddles=%d misc=%u\n",
     info.capabilities.rumble,
+    info.capabilities.trigger_rumble,
     info.capabilities.leds,
+    info.capabilities.player_leds,
     info.capabilities.imu,
-    info.capabilities.touchpad);
+    info.capabilities.touchpad,
+    info.capabilities.adaptive_triggers,
+    info.capabilities.battery,
+    info.capabilities.paddles,
+    static_cast<unsigned int>(info.capabilities.misc_buttons));
 
   device->set_feedback_callback([](const apollo::input::Feedback &feedback) {
     if (feedback.type == apollo::input::FeedbackType::rumble) {

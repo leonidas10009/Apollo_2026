@@ -906,6 +906,8 @@ namespace config {
     true,  // native pen/touch support
     false,  // enable input only mode
     true,  // forward_rumble
+    3,  // gamepad_stick_deadzone
+    2,  // gamepad_trigger_deadzone
   };
 
   /**
@@ -2026,6 +2028,8 @@ namespace config {
     bool_f(vars, "native_pen_touch", input.native_pen_touch);
     bool_f(vars, "enable_input_only_mode", input.enable_input_only_mode);
     bool_f(vars, "forward_rumble", input.forward_rumble);
+    int_between_f(vars, "gamepad_stick_deadzone", input.gamepad_stick_deadzone, {0, 30});
+    int_between_f(vars, "gamepad_trigger_deadzone", input.gamepad_trigger_deadzone, {0, 30});
 
     bool_f(vars, "notify_pre_releases", sunshine.notify_pre_releases);
     bool_f(vars, "system_tray", sunshine.system_tray);

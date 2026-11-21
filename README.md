@@ -56,23 +56,30 @@ The full Git history, authorship, GPL-3.0 license, and upstream notices are reta
 
 ## Reusable components
 
-- [`libs/apollo-input`](libs/apollo-input/README.md) — standalone MIT-licensed C++ input
-  abstraction library with ViGEmBus (Windows) and uinput (Linux) backends. It is independent of
-  Apollo and can be embedded in other projects with `add_subdirectory` or `find_package`.
-  See [docs/apollo-input.md](docs/apollo-input.md) for architecture, SDL3 analysis and roadmap.
+- [`libs/apollo-input`](libs/apollo-input/README.md) — ApolloInput Nova 0.3.0, a
+  standalone MIT-licensed C++ input abstraction library with Apollo HID (Windows,
+  UMDF2 + VHF), ViGEmBus (Windows) and uinput (Linux) backends, controller profiles,
+  compatibility fallback, anti-drift filtering and a Windows tester. It is independent
+  of Apollo and can be embedded in other projects with `add_subdirectory` or
+  `find_package`. See [docs/apollo-input.md](docs/apollo-input.md) for architecture,
+  profiles, SDL3 analysis and roadmap.
 
 ## Current status
 
 **Apollo 2026 1.0.1** is the current release, based on Sunshine `2026.1116.25010`.
 
 - Windows binaries: `apollo.exe`, NSIS installer and portable ZIP.
-- Native tests: **943 tests / 930 pass / 13 skipped / 0 failed** (last recorded run).
-- Web UI: **248 tests pass**; `npm audit` reports 0 vulnerabilities.
+- Native tests: **946 tests / 933 pass / 13 skipped / 0 failed** (last recorded run).
+- Web UI: **258 tests pass**; `npm audit` reports 0 vulnerabilities.
 - Remote server commands: authenticated `POST /servercmd?index=N` for power actions
   from Artemis without starting a stream.
 - SudoVDA is bundled and installed by the Windows installer.
 - Virtual HID Broker is optional and requires a paid machine license.
 - ViGEmBus 1.22.0 can be installed separately as a free Xbox 360/DS4 fallback.
+- Configurable gamepad stick/trigger deadzones, radial anti-drift filtering and
+  resume neutralization (ApolloInput Nova precision path).
+- Apollo HID (UMDF2 + VHF) backend is implemented in ApolloInput Nova but **not
+  yet selected by the host**; `gamepad_driver` remains ViGEmBus/libvirtualhid.
 
 See [docs/status.md](docs/status.md) for artifacts, verification, known limitations and the
 remaining runtime tests (pairing, streaming, clean-machine installer and code signing).

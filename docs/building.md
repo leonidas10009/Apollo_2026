@@ -45,17 +45,24 @@ currently published to NPM; `npm pack` from the repository root produces it loca
 
 #### Reusable input library
 
-`libs/apollo-input` is a standalone MIT C++ library for virtual gamepads. It is not
-part of the native Apollo build; build it separately:
+`libs/apollo-input` is ApolloInput Nova **0.3.0**, a standalone MIT C++ library for
+virtual gamepads. It includes the Apollo HID (UMDF2 + VHF) backend as well as
+ViGEmBus, uinput and null. It is vendored but not linked into the native Apollo
+build; build it separately:
 
 ```bash
 cmake -S libs/apollo-input -B cmake-build-apollo-input -G Ninja \
-  -DAPOLLO_INPUT_VIGEMCLIENT_DIR="$PWD/third-party/ViGEmClient"
+  -DAPOLLO_INPUT_VIGEMCLIENT_DIR="$PWD/third-party/ViGEmClient" \
+  -DAPOLLO_INPUT_APOLLO_HID_DIR="$PWD/../../apollo HID"
 cmake --build cmake-build-apollo-input --parallel
 ctest --test-dir cmake-build-apollo-input --output-on-failure
 ```
 
-See [apollo-input.md](apollo-input.md) for the API, backends and roadmap.
+The build produces the library, the demo, the two test executables and the Windows
+controller tester at `cmake-build-apollo-input/tools/`. See
+[apollo-input.md](apollo-input.md) for the API, profiles, backends, tester and
+roadmap, and [controller-compatibility.md](controller-compatibility.md) for the
+controller study.
 
 #### FreeBSD
 > [!CAUTION]

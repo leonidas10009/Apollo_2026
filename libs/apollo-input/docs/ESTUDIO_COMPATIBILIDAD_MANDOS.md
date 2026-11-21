@@ -1,0 +1,279 @@
+# Estudio de compatibilidad de mandos — ApolloInput Nova 0.3.0
+
+> Estado: **ApolloInput Nova 0.3.0** en desarrollo; 0.2.0 está publicado en
+> https://github.com/leonidas10009/apollo_input.
+> El parche de host para Apollo se distribuye por separado en `integration/`;
+> este repositorio no modifica el servidor Apollo.
+
+## 1. Objetivo
+
+Ampliar la compatibilidad de mandos de `apollo-input` sin romper lo que ya
+funciona y sin depender de un driver con licencia. El trabajo se centra en tres
+capas:
+
+1. **Modelo de perfiles**: más tipos de mando virtual y más capacidades.
+2. **Selección automática**: elegir el mejor perfil a partir de lo que reporta el
+   cliente (familia, touchpad, movimiento, palancas traseras, botones extra).
+3. **Fallback**: si el backend no puede crear el perfil preferido, crear uno
+   compatible en lugar de fallar.
+
+## 2. Nombre nuevo
+
+La versión se llama **ApolloInput Nova**. El paquete CMake y el espacio de
+nombres C++ siguen siendo `apollo-input` / `apollo::input` para no romper a los
+consumidores. El nombre Nova distingue esta generación mientras se valida.
+
+## 3. Qué se ha añadido
+
+### Perfiles nuevos
+
+- `xbox_elite`
+- `dualsense_edge`
+- `steam_controller`
+- `steam_deck`
+
+### Capacidades nuevas
+
+- `trigger_rumble`
+- `player_leds`
+- `battery`
+- `paddles`
+- `misc_buttons`
+- Botón `Button::misc2`
+
+### API nueva
+
+- `profile_capabilities()`
+- `profile_identity()`
+- `recommended_profile()`
+- `profile_compatibility_chain()`
+- `Backend::create_compatible()`
+- `controller_family_from_string()`
+- Alias de perfiles y backends sin distinguir mayúsculas.
+
+### Backends
+
+- **ViGEmBus (Windows)**: sigue creando Xbox 360 y DualShock 4, pero ahora
+  reporta capacidades correctas y `create_compatible()` permite que una petición
+  de DualSense, Switch Pro o Steam acabe en un mando funcional.
+- **uinput (Linux)**: ahora es consciente del perfil. Usa la identidad USB
+  correcta (VID/PID/versión), expone todos los perfiles y añade palancas, Share,
+  click de touchpad y `misc2` mediante `BTN_TRIGGER_HAPPY*`.
+- **Null**: simula capacidades y datos opcionales para pruebas y previews.
+
+### Precisión y anti-drift
+
+- `sanitize_gamepad_state()` aplica una **deadzone radial** a los sticks, no por
+  eje. Esto evita que un pequeño movimiento diagonal se convierta en drift en
+  un solo eje.
+- Los valores dentro de la deadzone se fuerzan a `0,0` exacto.
+- Los valores fuera de la deadzone se reescalan para conservar todo el recorrido.
+- Los gatillos tienen su propia deadzone y también se reescalan.
+- `Device::set_deadzone()` permite ajustar el filtro por dispositivo.
+- El parche de host (`integration/`) aplica la misma lógica antes de enviar el
+  estado al backend, por lo que cubre libvirtualhid y ViGEmBus.
+- El parche también envía un estado neutro al reanudar una sesión pausada, antes
+  de reenganchar el mando, evitando que un stick o gatillo quede "pillado".
+
+### Tester real
+
+La carpeta incluye `bin/apollo-input-controller-tester.exe`:
+
+- enumera XInput, DirectInput e interfaces HID,
+- muestra botones/ejes en vivo,
+- mide drift en reposo,
+- crea mandos virtuales con cualquier perfil o fallback,
+- hace bridge físico → virtual,
+- reenvía rumble al mando Xbox físico,
+- ejecuta self-test visible y verificación XInput.
+
+## 4. Matriz de perfiles
+
+| Perfil | Rumble | Rumble gatillos | Lightbar | LEDs jugador | IMU | Touchpad | Gatillos adaptativos | Batería | Palancas | Botones misc |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `xbox_360` | Sí | No | No | No | No | No | No | No | No | 0 |
+| `xbox_one` | Sí | Sí | No | No | No | No | No | Sí | No | 0 |
+| `xbox_series` | Sí | Sí | No | No | No | No | No | Sí | No | 1 |
+| `xbox_elite` | Sí | Sí | No | No | No | No | No | Sí | Sí | 1 |
+| `dualshock4` | Sí | No | Sí | No | Sí | Sí | No | Sí | No | 0 |
+| `dualsense` | Sí | No | Sí | Sí | Sí | Sí | Sí | Sí | No | 1 |
+| `dualsense_edge` | Sí | No | Sí | Sí | Sí | Sí | Sí | Sí | Sí | 1 |
+| `switch_pro` | Sí | No | Sí | Sí | Sí | No | No | Sí | No | 1 |
+| `steam_controller` | Sí | No | No | No | Sí | Sí | No | Sí | Sí | 0 |
+| `steam_deck` | Sí | No | No | No | Sí | Sí | No | Sí | Sí | 1 |
+| `generic` | Sí | No | No | No | No | No | No | No | No | 0 |
+
+La matriz describe lo que **puede representar el perfil**. Cada backend publica
+en `DeviceInfo::capabilities` el subconjunto que realmente puede exponer.
+
+## 5. Matriz de backends
+
+| Backend | Plataforma | Perfiles | Capacidades reales | Requisitos |
+|---|---|---|---|---|
+| Apollo HID | Windows | Todos los integrados; los avanzados usan descriptores HID de compatibilidad | DS4/DS5 con rumble, lightbar, IMU, touchpad y player LEDs; hasta 8 mandos | Driver Apollo HID 0.1.0.6+ (protocolo 2) |
+| ViGEmBus | Windows | Xbox 360 y DS4; el resto por fallback | Rumble; DS4 con lightbar, IMU y touchpad | ViGEmBus 1.22 instalado |
+| uinput | Linux | Todos los integrados | Botones, ejes, D-pad, palancas, Share, click de touchpad | `/dev/uinput` escribible |
+| Null | Todas | Todos | Simulación para tests | Ninguno |
+
+Apollo HID es el backend nativo UMDF2 + VHF. Abre un handle de control por
+dispositivo, de modo que cada mando queda aislado por file object; cerrar un
+mando no elimina los demás. Los slots son por handle y `AUTO_SLOT` pide el menor
+libre. Se selecciona explícitamente con `BackendKind::apollo_hid`; `automatic`
+mantiene ViGEmBus como preferencia en Windows mientras esté compilado.
+
+ViGEmBus está EOL y no puede crear Xbox One/Series, Elite, DualSense, Edge,
+Switch Pro ni Steam. El fallback mantiene esos mandos utilizables como DS4 o
+Xbox 360, pero se pierden las características exclusivas. Apollo HID cubre DS4
+con HID nativo; para el resto en Windows hace falta ampliar sus descriptores o
+usar un backend HID licenciado.
+
+## 6. Selección automática
+
+`recommended_profile()` aplica esta lógica:
+
+| Mando del cliente | Perfil recomendado |
+|---|---|
+| Xbox sin palancas | `xbox_series` |
+| Xbox con palancas | `xbox_elite` |
+| PlayStation sin touchpad/movimiento | `dualshock4` |
+| PlayStation con touchpad/movimiento | `dualsense` |
+| PlayStation con palancas | `dualsense_edge` |
+| Nintendo | `switch_pro` |
+| Steam Controller con touchpad/movimiento | `steam_controller` |
+| Steam Deck con touchpad/movimiento/palancas | `steam_deck` |
+| Desconocido con touchpad/movimiento | `dualsense` |
+| Desconocido con palancas | `xbox_elite` |
+| Desconocido sin extras | `xbox_series` |
+
+## 7. Cadenas de fallback
+
+```text
+dualsense_edge -> dualsense -> dualshock4 -> xbox_360 -> generic
+xbox_elite     -> xbox_series -> xbox_one -> xbox_360 -> generic
+steam_deck     -> steam_controller -> dualsense -> dualshock4 -> xbox_360 -> generic
+switch_pro     -> xbox_360 -> generic
+```
+
+`create_compatible()` devuelve un dispositivo y el perfil real queda en
+`DeviceInfo::profile`. Los logs y la UI deben mostrar ese perfil real.
+
+## 8. Mandos físicos
+
+### Xbox
+
+- **Xbox 360**: familia `xbox`; perfil `xbox_series` o `xbox_360`.
+- **Xbox One**: perfil `xbox_series`; ViGEm pierde rumble de gatillos y batería.
+- **Xbox Series**: perfil `xbox_series`; Share existe en el modelo, pero ViGEm no
+  lo expone. uinput lo expone como botón extra.
+- **Xbox Elite Series 2**: perfil `xbox_elite`; uinput expone las 4 palancas;
+  ViGEm cae a Xbox 360 y las pierde.
+
+### PlayStation
+
+- **DualShock 3**: familia `playstation`; se aproxima con `dualshock4`.
+- **DualShock 4**: perfil `dualsense` por touchpad/movimiento o `dualshock4` si
+  el juego exige identidad DS4.
+- **DualSense**: perfil `dualsense`; ViGEm cae a DS4 y pierde gatillos
+  adaptativos y LEDs de jugador.
+- **DualSense Edge**: perfil `dualsense_edge`; las dos funciones y las dos
+  palancas se modelan como `paddle1..paddle4`.
+
+### Nintendo
+
+- **Switch Pro**: perfil `switch_pro`; rumble, IMU, LEDs de jugador, batería y
+  Capture.
+- **Joy-Con**: se aproxima con `switch_pro` cuando el cliente los presenta
+  combinados.
+- **Switch 2 / Joy-Con 2**: sin perfil todavía; SwitchKit tampoco los soporta.
+
+### Valve
+
+- **Steam Controller**: perfil `steam_controller`; se modela un touchpad y un IMU,
+  no los dos touchpads por separado. Las palancas se exponen como `paddle1..4`.
+- **Steam Deck**: perfil `steam_deck`; igual que el Steam Controller más un botón
+  misc.
+
+### Genéricos
+
+- **8BitDo y similares**: en modo XInput usar `xbox_series`; en modo Switch usar
+  `switch_pro`; en HID genérico usar `generic`.
+- **Modo USB/Bluetooth**: cambia las capacidades que reporta el cliente. El host
+  debe confiar en las capacidades reportadas, no en el modelo comercial.
+
+## 9. Repositorios de referencia
+
+| Repo | Licencia | Uso |
+|---|---|---|
+| [WujekFoliarz/duaLib](https://github.com/WujekFoliarz/duaLib) | MIT | Reportes DS4/DualSense, gatillos adaptativos y botones extra de DualSense Edge |
+| [Meorge/SwitchKit](https://github.com/Meorge/SwitchKit) | MIT | Reportes de Switch Pro/Joy-Con, HD Rumble, IMU y LEDs |
+| [adamczykpiotr/simple-xpad](https://github.com/adamczykpiotr/simple-xpad) | Ver repo | Comportamiento Xbox One USB/Bluetooth y límites de rumble |
+| [mdqinc/SDL_GameControllerDB](https://github.com/mdqinc/SDL_GameControllerDB) | zlib | GUIDs, mappings estándar y convención de palancas/misc |
+
+Son referencias de protocolo y mapeo. ApolloInput Nova no las enlaza ni copia
+código de LizardByte LB-SAL 1.0.
+
+## 10. Limitaciones actuales
+
+1. uinput no expone IMU, touchpad, batería ni LEDs.
+2. ViGEmBus no crea DualSense, DualSense Edge, Switch Pro, Xbox Elite ni Steam.
+3. Apollo HID implementa DS5/Edge, Xbox, Switch y Steam con descriptores de
+   compatibilidad; falta validarlos en Steam/hardware y, si hace falta, usar
+   descriptores bit-exactos.
+4. El host Apollo todavía no selecciona `ApolloHidBackend`.
+5. La lectura de salida de Apollo HID es polled; falta inverted call.
+6. La interfaz de control de Apollo HID no tiene ACL restrictiva.
+7. Los dos touchpads del Steam Controller se unifican en uno.
+8. Switch 2 y Joy-Con 2 no están modelados.
+9. No hay backend macOS en esta librería.
+10. uinput no tiene force feedback.
+
+## 11. Validación realizada
+
+- [x] Compilación MSYS2/UCRT64 de ApolloInput Nova 0.3.0.
+- [x] `apollo-input-core`: perfiles, alias, capacidades, identidades,
+      recomendaciones, cadenas de fallback, anti-drift y backend null.
+- [x] `apollo-input-vigem-xinput`: creación de mando Xbox 360, lectura por
+      XInput, pulsación/liberación de A y movimiento de stick.
+- [x] Fallback DualSense -> DualShock 4 en ViGEmBus.
+- [x] Tester: `list`, `monitor`, `selftest`, `bridge` y `verify` contra mandos
+      virtuales Xbox 360 y DualShock 4.
+- [x] Host Apollo: pruebas específicas de deadzone, botones, perfiles Steam y
+      reanudación de sesión en la copia de trabajo previa a publicar el parche.
+- [x] DualSense físico `054C:0CE6`: drift PASS (202 muestras, 0 tras filtrado)
+      y bridge físico → DualShock 4.
+- [x] Apollo HID: backend compilado en el checkout independiente y en
+      `Apollo-git/libs/apollo-input`.
+- [x] Apollo HID: archivo instalado y consumidor externo con
+      `find_package(apollo-input)`.
+- [x] Apollo HID: detección no invasiva de versión que rechaza 0.1.0.5.
+- [x] Apollo HID: registro y encoders de todos los perfiles integrados.
+- [ ] Apollo HID multi-pad en hardware tras instalar el driver 0.1.0.6.
+- [ ] Validar DS5/Edge, Xbox, Switch Pro y Steam en Steam/hardware.
+- [ ] Suite completa de Apollo después de aplicar el parche de streaming.
+- [ ] Resto de mandos físicos del usuario mediante el tester.
+
+## 12. Validación pendiente
+
+- [ ] uinput en una máquina Linux real con `evtest`, `jstest` y SDL3
+      `testcontroller`.
+- [ ] Reconocimiento de cada perfil uinput por Steam Input.
+- [ ] Integración de `ApolloHidBackend` en el host Apollo con selección por
+      perfil y fallback.
+- [ ] Gatillos adaptativos de DualSense en Apollo HID.
+- [ ] Movimiento y rumble de Switch Pro en Apollo HID.
+- [ ] Palancas de Xbox Elite y DualSense Edge en Apollo HID.
+- [ ] Firma EV y atestación de Microsoft del driver Apollo HID.
+
+## 13. Próximos pasos recomendados
+
+1. Instalar el driver Apollo HID 0.1.0.6 y validar multi-pad y aislamiento por
+   cliente.
+2. Integrar `ApolloHidBackend` en el host Apollo con
+   `gamepad_driver = apollohid` y fallback.
+3. Implementar DualSense, Xbox One/Series, Elite, Edge, Switch Pro y Steam.
+4. Completar la firma EV y la atestación de Microsoft.
+5. Si se decide revivir ViGEmBus como fork, llamarlo **ViGEmBus Reforged** y
+   mantenerlo en una carpeta de staging separada hasta validarlo.
+
+> Importante: este repositorio es la librería independiente. El parche de
+> streaming se aplica aparte y **no se ha desplegado** en `Release\apollo.exe`.

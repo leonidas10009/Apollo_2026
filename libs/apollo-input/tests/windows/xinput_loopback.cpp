@@ -159,6 +159,18 @@ int main() {
     return 1;
   }
 
+  auto compatible = backend->create_compatible(apollo::input::Profile::dualsense, "Apollo Input Compatible", &error);
+  if (!compatible) {
+    std::fprintf(stderr, "Unable to create a compatible fallback controller: %s\n", error.c_str());
+    return 1;
+  }
+  if (compatible->info().profile != apollo::input::Profile::dualshock4) {
+    std::fprintf(stderr, "DualSense fallback did not use the DualShock 4 profile\n");
+    compatible->disconnect();
+    return 1;
+  }
+  compatible->disconnect();
+
   std::puts("XInput loopback passed");
   return 0;
 }

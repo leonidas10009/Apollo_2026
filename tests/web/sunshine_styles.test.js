@@ -46,18 +46,20 @@ function componentStyle(markup, selector) {
 /**
  * @brief Mount the featured page with a deterministic app directory.
  *
- * @param {object} directory App and category data returned by the directory service.
+ * The page uses a local curated directory in production. Tests can still
+ * replace the data after mounting to exercise different category counts.
+ *
+ * @param {object} directory App and category data for the rendered cards.
  * @returns {Promise<import('@vue/test-utils').VueWrapper>} Mounted featured page.
  */
-async function mountFeatured(directory) {
-  vi.stubGlobal('fetch', vi.fn(async () => ({
-    ok: true,
-    json: async () => directory,
-  })))
+async function mountFeatured(directory = {}) {
   wrapper = mount(Featured, {
     attachTo: document.body,
     global: { mocks: { $t: key => key }, stubs: { Navbar: true, SimpleIcon: true } },
   })
+  wrapper.vm.apps = directory.apps || []
+  wrapper.vm.categories = directory.categories || []
+  await wrapper.vm.$nextTick()
   await flushPromises()
   return wrapper
 }
@@ -138,7 +140,9 @@ function componentCases(colors) {
     ['active dropdown item', '<div class="dropdown-menu"><button class="dropdown-item active">Theme</button></div>', 'button', { color: colors.text }],
     ['dropdown divider', '<div class="dropdown-menu"><hr class="dropdown-divider"></div>', 'hr', { opacity: '1' }],
     ['featured icon', '<div class="featured-app-icon"><img alt="App"></div>', 'img', { maxWidth: '64px', maxHeight: '64px' }],
-    ['screenshot', '<button class="screenshot-thumbnail-button"><img class="screenshot-thumbnail" alt="Screenshot"></button>', 'img', { height: '120px', maxWidth: '200px' }],
+    ['app poster', '<div class="app-poster-container"><img class="app-poster" alt="Poster"></div>', '.app-poster', { objectFit: 'contain' }],
+    ['app poster backdrop', '<div class="app-poster-container"><img class="app-poster-backdrop" alt=""></div>', '.app-poster-backdrop', { objectFit: 'cover', position: 'absolute' }],
+    ['screenshot', '<button class="screenshot-thumbnail-button"><img class="screenshot-thumbnail" alt="Screenshot"></button>', 'img', { height: '200px', maxWidth: '320px' }],
   ]
 }
 

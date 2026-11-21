@@ -70,13 +70,23 @@
            @dragend="onDragEnd">
         <div class="card app-card h-100">
           <div class="app-poster-container">
-            <img
-              v-if="app['image-path']"
-              :src="'/api/covers/' + index"
-              class="app-poster"
-              :alt="app.name"
-              @error="handleImageError"
-            />
+            <template v-if="app['image-path'] && !posterErrors[app.uuid || index]">
+              <img
+                :src="'/api/covers/' + index"
+                class="app-poster-backdrop"
+                alt=""
+                aria-hidden="true"
+                loading="lazy"
+                @error="handlePosterError(app.uuid || index)"
+              />
+              <img
+                :src="'/api/covers/' + index"
+                class="app-poster"
+                :alt="app.name"
+                loading="lazy"
+                @error="handlePosterError(app.uuid || index)"
+              />
+            </template>
             <div v-else class="app-poster-placeholder">
               <span class="app-initial">{{ app.name.charAt(0).toUpperCase() }}</span>
             </div>
@@ -830,6 +840,7 @@
         currentApp: "",
         hostName: "",
         hostUUID: "",
+        posterErrors: {},
       };
     },
     computed: {
@@ -1294,13 +1305,10 @@
           this.editFormError = this.$t('apps.save_failed') + (error.message || "");
         });
       },
-      handleImageError(event) {
-        // Hide the broken image and show placeholder instead
-        event.target.style.display = 'none';
-        const placeholder = event.target.nextElementSibling;
-        if (placeholder && placeholder.classList.contains('app-poster-placeholder')) {
-          placeholder.style.display = 'flex';
-        }
+      handlePosterError(posterKey) {
+        // Both the blurred backdrop and the foreground use the same source;
+        // one failure is enough to switch the card to its placeholder.
+        this.posterErrors = { ...this.posterErrors, [posterKey]: true };
       },
       resetSearchQuery() {
         this.searchQuery = "";
