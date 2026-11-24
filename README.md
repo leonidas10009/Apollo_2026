@@ -288,19 +288,28 @@ Same command can be used to upgrade, add to a scheduled task to automate updates
 
 See more details on the chocolatey package [here](https://community.chocolatey.org/packages/apollo)
 
-## Disclaimer
+## About this fork
 
-I got kicked from Moonlight and Sunshine's Discord server and banned from Sunshine's GitHub repo literally for helping people out.
+Apollo 2026 is an independent, unofficial fork maintained by
+[leonidas10009](https://github.com/leonidas10009). It continues
+[Apollo](https://github.com/ClassicOldSong/Apollo) by **ClassicOldSong (Yukino Song)**,
+which is itself based on [Sunshine](https://github.com/SunshineStream/Sunshine)
+by LizardByte and contributors.
 
-This is what I got for finding a bug, opened an issue, getting no response, troubleshoot myself, fixed the issue myself, shared it by PR to the main repo hoping my efforts can help someone else during the maintenance gap.
+The fork keeps the upstream architecture, Git history and GPL-3.0 license, and focuses on:
 
-Yes, I'm going away. [Apollo](https://github.com/ClassicOldSong/Apollo) and [Artemis(Moonlight Noir)](https://github.com/ClassicOldSong/moonlight-android) will no longer be compatible with OG Sunshine and OG Moonlight eventually, but they'll work even better with much more carefully designed features.
+- **Packaged Windows x64 releases** — NSIS installer and portable ZIP on the
+  [releases page](https://github.com/leonidas10009/Apollo_2026/releases). Linux, macOS
+  and FreeBSD are built from source.
+- **Windows virtual display** — the SudoVDA driver is bundled with the installer; HDR
+  requires Windows 11 23H2 or newer.
+- **Companion Android client** — [Artemis 2026](https://github.com/leonidas10009/Artemis-2026)
+  for phones, tablets and Android TV.
 
-The Moonlight repo had stayed silent for 5 months, with nobody actually responding to issues, and people are getting totally no help besides the limited FAQ in their Discord server. I tried to answer issues and questions, solve problems within my ability but I got kicked out just for helping others.
-
-**PRs for feature improvements are welcomed here unlike the main repo, your ideas are more likely to be appreciated and your efforts are actually being respected. We welcome people who can and willing to share their efforts, helping yourselves and other people in need.**
-
-**Update**: They have contacted me and apologized for this incident, but the fact it **happened** still motivated me to start my own fork.
+Apollo 2026 is not affiliated with ClassicOldSong, LizardByte or Moonlight Stream.
+Upstream commands, paths and environment variables keep their original `sunshine`
+names where they are compatibility identifiers. Please report issues with this fork
+here, not in the upstream repositories.
 
 ## License
 
