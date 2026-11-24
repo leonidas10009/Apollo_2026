@@ -251,13 +251,7 @@ No real time chat support will ever be provided for Apollo and Artemis. Includin
 
 > When there's a chat, there're dramas. -- Confucius
 
-## Downloads
-
-### Direct Download
-
-**Recommended**
-
-[Releases](https://github.com/leonidas10009/Apollo_2026/releases)
+## Other installation methods
 
 ### WinGet
 
