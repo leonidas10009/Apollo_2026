@@ -8,6 +8,8 @@
 
 **Companion Android client:** [Artemis 2026](https://github.com/leonidas10009/Artemis-2026), based on [Artemis / Moonlight Noir](https://github.com/ClassicOldSong/moonlight-android).
 
+**Documentation:** [English](https://leonidas10009.github.io/apollo-2026-docs/) · [Español](https://leonidas10009.github.io/apollo-2026-docs/es/)
+
 ## Downloads
 
 - [Apollo 2026 releases](https://github.com/leonidas10009/Apollo_2026/releases)
